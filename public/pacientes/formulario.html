@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Paciente · Sistema de Citas</title>
+  <link rel="stylesheet" href="/comun/estilos.css">
+</head>
+<body>
+  <header id="menu" data-activo="pacientes"></header>
+
+  <main class="contenedor">
+    <h1 id="titulo">Registrar paciente</h1>
+    <p class="subtitulo">Los campos con * son obligatorios.</p>
+
+    <div id="alerta" class="oculto"></div>
+
+    <form id="formulario" class="tarjeta" novalidate>
+      <div class="form-grid">
+        <div class="campo completo">
+          <label for="nombre">Nombre completo *</label>
+          <input id="nombre" name="nombre" required minlength="3" maxlength="120" autocomplete="name">
+        </div>
+        <div class="campo">
+          <label for="edad">Edad *</label>
+          <input id="edad" name="edad" type="number" required min="0" max="120" step="1">
+        </div>
+        <div class="campo">
+          <label for="telefono">Teléfono *</label>
+          <input id="telefono" name="telefono" type="tel" required placeholder="5512-3456" autocomplete="tel">
+        </div>
+        <div class="campo">
+          <label for="email">Correo electrónico</label>
+          <input id="email" name="email" type="email" placeholder="opcional" autocomplete="email">
+        </div>
+        <div class="campo completo">
+          <label for="alergias">Alergias conocidas</label>
+          <textarea id="alergias" name="alergias" maxlength="1000"
+                    placeholder="Ej.: penicilina, mariscos. Déjalo vacío si no tiene alergias conocidas."></textarea>
+          <span class="ayuda">El doctor verá esta información al atender la cita.</span>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; display: flex; gap: 12px;">
+        <button class="btn" type="submit" id="guardar">Guardar</button>
+        <a class="btn btn-secundario" href="/pacientes/">Cancelar</a>
+      </div>
+    </form>
+  </main>
+
+  <script src="/comun/comun.js"></script>
+  <script>
+    const id = new URLSearchParams(location.search).get('id');
+    const form = document.getElementById('formulario');
+    const alerta = document.getElementById('alerta');
+    const botonGuardar = document.getElementById('guardar');
+
+    // Si viene ?id=, es edición: cargar los datos actuales
+    async function cargarPaciente() {
+      if (!id) return;
+      document.getElementById('titulo').textContent = 'Editar paciente';
+      try {
+        const p = await api(`/api/pacientes/${encodeURIComponent(id)}`);
+        for (const campo of ['nombre', 'edad', 'telefono', 'email', 'alergias']) {
+          form.elements[campo].value = p[campo] ?? '';
+        }
+      } catch (err) {
+        mostrarAlerta(alerta, 'error', err.mensajes);
+        form.classList.add('oculto');
+      }
+    }
+
+    form.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      ocultarAlerta(alerta);
+
+      // Validación rápida en el navegador; el servidor vuelve a validar
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+
+      const datos = Object.fromEntries(new FormData(form));
+      botonGuardar.disabled = true;
+      try {
+        await api(id ? `/api/pacientes/${encodeURIComponent(id)}` : '/api/pacientes', {
+          method: id ? 'PUT' : 'POST',
+          body: JSON.stringify(datos),
+        });
+        location.href = '/pacientes/?guardado=1';
+      } catch (err) {
+        mostrarAlerta(alerta, 'error', err.mensajes);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } finally {
+        botonGuardar.disabled = false;
+      }
+    });
+
+    cargarPaciente();
+  </script>
+</body>
+</html>
