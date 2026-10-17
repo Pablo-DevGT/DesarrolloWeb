@@ -3,6 +3,13 @@ const { fechaHoraFutura } = require('./citas.validacion');
 
 const DURACION_MINUTOS = 60;
 const ESTADOS_ACTIVOS = ['pendiente', 'confirmada', 'reagendada'];
+const MAX_INTENTOS = 3;
+
+const MENSAJE_MEDICO_OCUPADO = 'El horario ya está ocupado. Selecciona otro horario.';
+const MENSAJE_PACIENTE_OCUPADO = 'El paciente ya tiene una cita activa que se superpone con ese horario.';
+const MENSAJE_MEDICO_INACTIVO = 'El médico seleccionado no está disponible para nuevas citas.';
+const MENSAJE_FUERA_DE_DISPONIBILIDAD = 'El horario no corresponde a la disponibilidad del médico.';
+const MENSAJE_SISTEMA_OCUPADO = 'El sistema está ocupado. Intenta nuevamente en unos momentos';
 
 class ErrorCitas extends Error {
   constructor(status, message) {
@@ -10,6 +17,25 @@ class ErrorCitas extends Error {
     this.name = 'ErrorCitas';
     this.status = status;
   }
+}
+
+// Errores de las reglas de la base de datos (índices únicos y triggers de
+// database/03_citas_disponibilidad.sql) convertidos en respuestas para el usuario
+function traducirErrorBaseDatos(error) {
+  const mensaje = String(error.message || '');
+  if (error.code === 'ER_DUP_ENTRY') {
+    const delPaciente = mensaje.includes('uq_cita_paciente_horario_activo') ||
+      mensaje.startsWith('El paciente ya tiene');
+    return new ErrorCitas(409, delPaciente ? MENSAJE_PACIENTE_OCUPADO : MENSAJE_MEDICO_OCUPADO);
+  }
+  if (error.code === 'ER_SIGNAL_EXCEPTION' && mensaje.includes('inactivo')) {
+    return new ErrorCitas(409, MENSAJE_MEDICO_INACTIVO);
+  }
+  // El horario cambió entre la revisión del servicio y el registro
+  if (error.code === 'ER_SIGNAL_EXCEPTION' && mensaje.includes('fuera del horario')) {
+    return new ErrorCitas(400, MENSAJE_FUERA_DE_DISPONIBILIDAD);
+  }
+  return error;
 }
 
 function minutos(hora) {
@@ -72,7 +98,8 @@ function crearServicio({ db = pool, reloj = () => new Date() } = {}) {
     const [medicos] = await db.query(
       `SELECT m.id, m.nombre, m.especialidad
          FROM medicos m
-        WHERE EXISTS (
+        WHERE m.activo = 1
+          AND EXISTS (
           SELECT 1 FROM disponibilidad_medicos d
            WHERE d.medico_id = m.id AND d.activo = 1
         )
@@ -85,8 +112,10 @@ function crearServicio({ db = pool, reloj = () => new Date() } = {}) {
     if (!fechaHoraFutura(fecha, '23:59', reloj())) {
       throw new ErrorCitas(400, 'No se pueden consultar horarios de una fecha pasada.');
     }
-    const [medicos] = await db.query('SELECT id FROM medicos WHERE id = ?', [medicoId]);
+    const [medicos] = await db.query('SELECT id, activo FROM medicos WHERE id = ?', [medicoId]);
     if (!medicos.length) throw new ErrorCitas(404, 'Médico no encontrado.');
+    // Un médico inactivo no ofrece horarios (mismo formato de respuesta, lista vacía)
+    if (!Number(medicos[0].activo)) return { medico_id: medicoId, fecha, horarios: [] };
 
     const disponibilidades = await obtenerDisponibilidad(db, medicoId, fecha);
     const horas = generarHoras(disponibilidades);
@@ -105,6 +134,20 @@ function crearServicio({ db = pool, reloj = () => new Date() } = {}) {
       throw new ErrorCitas(400, 'No se pueden solicitar citas en fechas u horas pasadas.');
     }
 
+    // Ante un interbloqueo (1213) InnoDB revierte toda la transacción, así que se
+    // repite completa, con todas sus validaciones, hasta MAX_INTENTOS veces.
+    for (let intento = 1; ; intento++) {
+      try {
+        return await intentarSolicitud(datos);
+      } catch (error) {
+        if (error.code !== 'ER_LOCK_DEADLOCK') throw error;
+        if (intento >= MAX_INTENTOS) throw new ErrorCitas(503, MENSAJE_SISTEMA_OCUPADO);
+        await new Promise((resolve) => setTimeout(resolve, 20 * intento + Math.floor(Math.random() * 30)));
+      }
+    }
+  }
+
+  async function intentarSolicitud(datos) {
     const connection = await db.getConnection();
     let transaccionIniciada = false;
     try {
@@ -112,10 +155,11 @@ function crearServicio({ db = pool, reloj = () => new Date() } = {}) {
       transaccionIniciada = true;
 
       const [medicos] = await connection.query(
-        'SELECT id FROM medicos WHERE id = ? FOR UPDATE',
+        'SELECT id, activo FROM medicos WHERE id = ? FOR UPDATE',
         [datos.medico_id]
       );
       if (!medicos.length) throw new ErrorCitas(404, 'Médico no encontrado.');
+      if (!Number(medicos[0].activo)) throw new ErrorCitas(409, MENSAJE_MEDICO_INACTIVO);
 
       const [pacientes] = await connection.query(
         'SELECT id FROM pacientes WHERE id = ?',
@@ -129,12 +173,12 @@ function crearServicio({ db = pool, reloj = () => new Date() } = {}) {
 
       const disponibilidades = await obtenerDisponibilidad(connection, datos.medico_id, datos.fecha);
       if (!generarHoras(disponibilidades).includes(datos.hora)) {
-        throw new ErrorCitas(400, 'El horario no corresponde a la disponibilidad del médico.');
+        throw new ErrorCitas(400, MENSAJE_FUERA_DE_DISPONIBILIDAD);
       }
 
       const citas = await obtenerCitasActivas(connection, datos.medico_id, datos.fecha);
       if (citas.some((cita) => seSuperponen(datos.fecha, datos.hora, cita.fecha, cita.hora))) {
-        throw new ErrorCitas(409, 'El horario ya está ocupado. Selecciona otro horario.');
+        throw new ErrorCitas(409, MENSAJE_MEDICO_OCUPADO);
       }
 
       const [resultado] = await connection.query(
@@ -150,10 +194,7 @@ function crearServicio({ db = pool, reloj = () => new Date() } = {}) {
         estado: 'pendiente',
       };
     } catch (error) {
-      if (error.code === 'ER_DUP_ENTRY') {
-        throw new ErrorCitas(409, 'El horario ya está ocupado. Selecciona otro horario.');
-      }
-      throw error;
+      throw traducirErrorBaseDatos(error);
     } finally {
       if (transaccionIniciada) {
         try {

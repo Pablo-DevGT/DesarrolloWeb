@@ -6,9 +6,11 @@ const { validarSolicitud } = require('../src/citas/citas.validacion');
 class BaseDatosFalsa {
   constructor() {
     this.medicos = [
-      { id: 1, nombre: 'Dra. Ana Ruiz', especialidad: 'Pediatría' },
-      { id: 2, nombre: 'Dr. Luis Castillo', especialidad: 'Cardiología' },
+      { id: 1, nombre: 'Dra. Ana Ruiz', especialidad: 'Pediatría', activo: 1 },
+      { id: 2, nombre: 'Dr. Luis Castillo', especialidad: 'Cardiología', activo: 1 },
     ];
+    // Médico inactivo con horarios: no debe listarse ni recibir citas
+    this.inactivo = { id: 3, nombre: 'Dra. Sofía Morales', especialidad: 'Dermatología', activo: 0 };
     this.pacientes = [{ id: 1 }, { id: 2 }];
     this.disponibilidades = this.medicos.flatMap((medico) =>
       Array.from({ length: 7 }, (_, indice) => ({
@@ -19,6 +21,8 @@ class BaseDatosFalsa {
         activo: 1,
       }))
     );
+    this.medicos.push(this.inactivo);
+    this.disponibilidades.push({ medico_id: 3, dia_semana: 1, hora_inicio: '09:00', hora_fin: '12:00', activo: 1 });
     this.citas = [];
     this.siguienteId = 1;
     this.cierres = new Map();
@@ -37,16 +41,17 @@ class BaseDatosFalsa {
   async ejecutar(sql, parametros, conexion) {
     if (this.errorSiguiente && sql.includes(this.errorSiguiente.coincide)) {
       const error = this.errorSiguiente.error;
-      this.errorSiguiente = null;
+      this.errorSiguiente.veces = (this.errorSiguiente.veces ?? 1) - 1;
+      if (this.errorSiguiente.veces <= 0) this.errorSiguiente = null;
       throw error;
     }
 
-    if (sql.includes('SELECT id FROM medicos WHERE id = ? FOR UPDATE')) {
+    if (sql.includes('SELECT id, activo FROM medicos WHERE id = ? FOR UPDATE')) {
       const medicoId = Number(parametros[0]);
       if (conexion) await this.bloquear(medicoId, conexion);
       return [this.medicos.filter((medico) => medico.id === medicoId), []];
     }
-    if (sql.includes('SELECT id FROM medicos WHERE id = ?')) {
+    if (sql.includes('SELECT id, activo FROM medicos WHERE id = ?')) {
       return [this.medicos.filter((medico) => medico.id === Number(parametros[0])), []];
     }
     if (sql.includes('SELECT id FROM pacientes WHERE id = ?')) {
@@ -54,7 +59,7 @@ class BaseDatosFalsa {
     }
     if (sql.includes('SELECT m.id, m.nombre, m.especialidad')) {
       return [
-        this.medicos.filter((medico) =>
+        this.medicos.filter((medico) => (!sql.includes('m.activo = 1') || medico.activo === 1) &&
           this.disponibilidades.some((item) => item.medico_id === medico.id && item.activo === 1)
         ),
         [],
@@ -264,5 +269,122 @@ describe('rutas /api/citas', () => {
     const respuesta = await fetch(`${base}/medicos`);
     assert.equal(respuesta.status, 500);
     assert.match((await respuesta.json()).error, /error en el servidor/i);
+  });
+
+  test('médico inactivo: no se lista, no ofrece horarios y la solicitud responde 409', async () => {
+    const medicos = await (await fetch(`${base}/medicos`)).json();
+    assert.ok(!medicos.some((medico) => medico.id === 3));
+    const horarios = await fetch(`${base}/horarios?medico_id=3&fecha=${fechaPrueba}`);
+    assert.equal(horarios.status, 200);
+    assert.deepEqual(await horarios.json(), { medico_id: 3, fecha: fechaPrueba, horarios: [] });
+    const respuesta = await fetch(base, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(solicitud({ medico_id: 3, hora: '10:00' })),
+    });
+    assert.equal(respuesta.status, 409);
+    assert.deepEqual(await respuesta.json(), { error: 'El médico seleccionado no está disponible para nuevas citas.' });
+  });
+
+  test('responde 503 cuando se agotan los reintentos por interbloqueo', async () => {
+    const interbloqueo = Object.assign(new Error('Deadlock found'), { code: 'ER_LOCK_DEADLOCK', errno: 1213 });
+    apiDb.errorSiguiente = { coincide: 'INSERT INTO citas', error: interbloqueo, veces: 3 };
+    const respuesta = await fetch(base, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(solicitud({ fecha: '2030-01-14', hora: '11:00' })),
+    });
+    assert.equal(respuesta.status, 503);
+    assert.deepEqual(await respuesta.json(), { error: 'El sistema está ocupado. Intenta nuevamente en unos momentos' });
+  });
+});
+
+describe('servicio de citas: reglas de la base de datos e interbloqueos', () => {
+  const errorMysql = (code, message, errno) => Object.assign(new Error(message), { code, errno });
+  let db;
+  let servicio;
+
+  before(() => {
+    db = new BaseDatosFalsa();
+    servicio = crearServicio({ db, reloj: ahoraPrueba });
+  });
+
+  test('rechaza con 409 la solicitud para un médico inactivo sin insertar', async () => {
+    await assert.rejects(servicio.crearSolicitud(solicitud({ medico_id: 3 })),
+      { status: 409, message: 'El médico seleccionado no está disponible para nuevas citas.' });
+    assert.equal(db.citas.length, 0);
+  });
+
+  test('distingue el conflicto del paciente (trigger) del conflicto del médico', async () => {
+    db.errorSiguiente = {
+      coincide: 'INSERT INTO citas',
+      error: errorMysql('ER_DUP_ENTRY', 'El paciente ya tiene una cita activa que se superpone con ese horario.', 1062),
+    };
+    await assert.rejects(servicio.crearSolicitud(solicitud({ medico_id: 2 })),
+      { status: 409, message: 'El paciente ya tiene una cita activa que se superpone con ese horario.' });
+
+    db.errorSiguiente = {
+      coincide: 'INSERT INTO citas',
+      error: errorMysql('ER_DUP_ENTRY', "Duplicate entry '1-2030-01-07-09:00:00-1' for key 'citas.uq_cita_paciente_horario_activo'", 1062),
+    };
+    await assert.rejects(servicio.crearSolicitud(solicitud({ medico_id: 2 })),
+      { status: 409, message: 'El paciente ya tiene una cita activa que se superpone con ese horario.' });
+
+    db.errorSiguiente = {
+      coincide: 'INSERT INTO citas',
+      error: errorMysql('ER_DUP_ENTRY', 'El médico ya tiene una cita activa que se superpone con ese horario.', 1062),
+    };
+    await assert.rejects(servicio.crearSolicitud(solicitud({ medico_id: 2 })),
+      { status: 409, message: 'El horario ya está ocupado. Selecciona otro horario.' });
+  });
+
+  test('traduce el rechazo del trigger por médico inactivo a 409', async () => {
+    db.errorSiguiente = {
+      coincide: 'INSERT INTO citas',
+      error: errorMysql('ER_SIGNAL_EXCEPTION', 'El médico está inactivo y no puede recibir nuevas citas.', 1644),
+    };
+    await assert.rejects(servicio.crearSolicitud(solicitud({ medico_id: 2, hora: '11:00' })),
+      { status: 409, message: 'El médico seleccionado no está disponible para nuevas citas.' });
+  });
+
+  test('si el horario cambió antes del registro (trigger de disponibilidad) responde el 400 existente', async () => {
+    db.errorSiguiente = {
+      coincide: 'INSERT INTO citas',
+      error: errorMysql('ER_SIGNAL_EXCEPTION', 'La cita está fuera del horario de atención del médico.', 1644),
+    };
+    const antes = db.citas.length;
+    await assert.rejects(servicio.crearSolicitud(solicitud({ medico_id: 2, hora: '10:00' })),
+      { status: 400, message: 'El horario no corresponde a la disponibilidad del médico.' });
+    assert.equal(db.citas.length, antes);
+  });
+
+  test('reintenta la transacción tras un interbloqueo 1213 y registra la cita una sola vez', async () => {
+    db.errorSiguiente = {
+      coincide: 'INSERT INTO citas', error: errorMysql('ER_LOCK_DEADLOCK', 'Deadlock found', 1213), veces: 2,
+    };
+    const antes = db.citas.length;
+    const cita = await servicio.crearSolicitud(solicitud({ fecha: '2030-01-14', hora: '09:00' }));
+    assert.equal(cita.estado, 'pendiente');
+    assert.equal(db.citas.length, antes + 1);
+  });
+
+  test('tras tres interbloqueos responde 503 y no lo confunde con un conflicto de horario', async () => {
+    db.errorSiguiente = {
+      coincide: 'INSERT INTO citas', error: errorMysql('ER_LOCK_DEADLOCK', 'Deadlock found', 1213), veces: 3,
+    };
+    const antes = db.citas.length;
+    await assert.rejects(servicio.crearSolicitud(solicitud({ fecha: '2030-01-14', hora: '10:00' })),
+      { status: 503, message: 'El sistema está ocupado. Intenta nuevamente en unos momentos' });
+    assert.equal(db.citas.length, antes);
+    assert.equal(db.errorSiguiente, null);
+  });
+
+  test('otros errores de MySQL no se reintentan y se propagan para HTTP 500', async () => {
+    db.errorSiguiente = {
+      coincide: 'INSERT INTO citas', error: errorMysql('ER_LOCK_WAIT_TIMEOUT', 'Lock wait timeout', 1205), veces: 2,
+    };
+    await assert.rejects(servicio.crearSolicitud(solicitud({ fecha: '2030-01-14', hora: '11:00' })), { code: 'ER_LOCK_WAIT_TIMEOUT' });
+    assert.equal(db.errorSiguiente.veces, 1, 'debe intentarse una sola vez');
+    db.errorSiguiente = null;
   });
 });

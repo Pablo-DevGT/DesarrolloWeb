@@ -11,7 +11,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ---- Rutas de cada módulo ----
 app.use('/api/pacientes', require('./src/pacientes/pacientes.routes')); // Integrante 2
-// app.use('/api/medicos',   require('./src/medicos/medicos.routes'));   // Integrante 1
+app.use('/api/medicos', require('./src/medicos/medicos.routes')); // Integrante 1
 app.use('/api/citas', require('./src/citas/citas.routes')); // Integrante 3
 // app.use('/api/recepcion', require('./src/recepcion/recepcion.routes'));// Integrante 4
 // app.use('/api/agenda',    require('./src/agenda/agenda.routes'));     // Integrante 5

@@ -4,8 +4,8 @@
 
 | Archivo | Para qué sirve |
 | --- | --- |
-| `database/02_pacientes.sql` | Crea la tabla `pacientes` con datos de prueba |
-| `database/prueba_historial.sql` | Solo pruebas locales: crea `medicos` y `citas` mínimas para probar el historial |
+| `database/02_pacientes.sql` | Crea la tabla `pacientes` (los datos de prueba están en `04_datos_prueba.sql`) |
+| `database/prueba_historial.sql` | Obsoleto: lo reemplazan `01_esquema.sql`, `03_citas_disponibilidad.sql` y `04_datos_prueba.sql`. No ejecutar |
 | `src/comun/db.js` | Conexión compartida a MySQL (la pueden usar todos) |
 | `src/pacientes/pacientes.validacion.js` | Reglas de validación de los datos del paciente |
 | `src/pacientes/pacientes.model.js` | Consultas SQL de pacientes e historial |
@@ -38,8 +38,10 @@ Errores de validación responden `400` con `{ "errores": ["..."] }`; un correo r
 
 ## Cómo correrlo
 
-1. En MySQL Workbench abre y ejecuta `database/02_pacientes.sql` (rayo ⚡).
-2. Si aún no existen las tablas de médicos y citas, ejecuta también `database/prueba_historial.sql`.
+1. En MySQL Workbench abre y ejecuta en orden (rayo ⚡) `database/01_esquema.sql`,
+   `database/02_pacientes.sql` y `database/03_citas_disponibilidad.sql`.
+2. Para tener datos de prueba ejecuta también `database/04_datos_prueba.sql`
+   (ver [base-de-datos.md](base-de-datos.md)).
 3. Copia `.env.example` como `.env` y escribe tu usuario y contraseña de MySQL.
 4. En la terminal de VS Code:
 
