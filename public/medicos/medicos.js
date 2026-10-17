@@ -24,6 +24,16 @@ function etiquetaActivo(activo) {
     : '<span class="estado estado-inactivo">Inactivo</span>';
 }
 
+// Nombre del paciente con enlace a su historial (módulo de Pacientes).
+// En un diálogo se abre en otra pestaña para no perder la confirmación en curso.
+function enlacePaciente(cita, { nuevaPestana = false } = {}) {
+  const nombre = escaparHTML(cita.paciente);
+  if (!cita.paciente_id) return nombre;
+  const destino = nuevaPestana ? ' target="_blank" rel="noopener"' : '';
+  return `<a href="/pacientes/historial.html?id=${encodeURIComponent(cita.paciente_id)}"${destino}
+             title="Ver historial de ${nombre}">${nombre}</a>`;
+}
+
 function tablaCitas(citas) {
   return `
     <div class="tabla-contenedor">
@@ -33,7 +43,7 @@ function tablaCitas(citas) {
           <tr>
             <td>${formatearFecha(c.fecha)}</td>
             <td>${escaparHTML(c.hora)}</td>
-            <td>${escaparHTML(c.paciente)}</td>
+            <td>${enlacePaciente(c, { nuevaPestana: true })}</td>
             <td>${etiquetaEstado(c.estado)}</td>
           </tr>`).join('')}
         </tbody>

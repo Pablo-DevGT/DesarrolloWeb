@@ -22,13 +22,13 @@ class BaseDatosFalsa {
     ];
     // 2030-01-07 es lunes y 2030-01-08 es martes
     this.citas = [
-      { id: 1, medico_id: 1, fecha: '2030-01-07', hora: '09:00', estado: 'confirmada', paciente: 'María López' },
-      { id: 2, medico_id: 1, fecha: '2030-01-07', hora: '11:00', estado: 'cancelada', paciente: 'José Pérez' },
-      { id: 3, medico_id: 1, fecha: '2029-12-31', hora: '09:00', estado: 'pendiente', paciente: 'Cita pasada' },
+      { id: 1, medico_id: 1, fecha: '2030-01-07', hora: '09:00', estado: 'confirmada', paciente: 'María López', paciente_id: 41 },
+      { id: 2, medico_id: 1, fecha: '2030-01-07', hora: '11:00', estado: 'cancelada', paciente: 'José Pérez', paciente_id: 42 },
+      { id: 3, medico_id: 1, fecha: '2029-12-31', hora: '09:00', estado: 'pendiente', paciente: 'Cita pasada', paciente_id: 43 },
     ];
     // Filas de la vista v_citas_por_revisar
     this.porRevisar = [
-      { cita_id: 7, medico_id: 1, fecha: '2030-01-09', hora: '15:00', estado: 'confirmada', paciente: 'Ana Pérez',
+      { cita_id: 7, medico_id: 1, fecha: '2030-01-09', hora: '15:00', estado: 'confirmada', paciente: 'Ana Pérez', paciente_id: 44,
         medico_inactivo: 0, fuera_de_disponibilidad: 1, motivo_revision: 'Fuera del horario de atención' },
     ];
     this.siguiente = { medicos: 3, horarios: 3 };
@@ -307,14 +307,14 @@ describe('servicio de médicos', () => {
   });
 
   test('consulta las citas futuras activas antes de desactivar', async () => {
-    assert.deepEqual((await servicio.citasFuturas(1)).map((c) => c.id), [1]);
+    assert.deepEqual((await servicio.citasFuturas(1)).map((c) => [c.id, c.paciente, c.paciente_id]), [[1, 'María López', 41]]);
     assert.deepEqual(await servicio.citasFuturas(2), []);
     await assert.rejects(servicio.citasFuturas(99), { status: 404 });
   });
 
   test('lista las citas por revisar con su motivo', async () => {
     assert.deepEqual(await servicio.citasPorRevisar(1), [{
-      id: 7, fecha: '2030-01-09', hora: '15:00', estado: 'confirmada', paciente: 'Ana Pérez',
+      id: 7, fecha: '2030-01-09', hora: '15:00', estado: 'confirmada', paciente: 'Ana Pérez', paciente_id: 44,
       medico_inactivo: false, fuera_de_disponibilidad: true, motivo_revision: 'Fuera del horario de atención',
     }]);
     assert.deepEqual(await servicio.citasPorRevisar(2), []);
@@ -510,6 +510,7 @@ describe('rutas /api/medicos', () => {
     assert.equal(r.status, 200);
     const [cita] = await r.json();
     assert.equal(cita.motivo_revision, 'Fuera del horario de atención');
+    assert.equal(cita.paciente_id, 44);
     assert.equal(cita.fuera_de_disponibilidad, true);
     assert.equal((await fetch(`${base}/99/citas-por-revisar`)).status, 404);
     assert.equal((await fetch(`${base}/x/citas-por-revisar`)).status, 400);

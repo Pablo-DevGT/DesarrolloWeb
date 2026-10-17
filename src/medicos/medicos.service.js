@@ -146,7 +146,7 @@ function crearServicio({ db = pool, reloj = () => new Date() } = {}) {
   async function citasFuturasActivas(conexion, medicoId) {
     const { fecha, hora } = ahora();
     const [citas] = await conexion.query(
-      `SELECT c.id, c.fecha, TIME_FORMAT(c.hora, '%H:%i') AS hora, c.estado, p.nombre AS paciente
+      `SELECT c.id, c.fecha, TIME_FORMAT(c.hora, '%H:%i') AS hora, c.estado, p.nombre AS paciente, c.paciente_id
          FROM citas c
          JOIN pacientes p ON p.id = c.paciente_id
         WHERE c.medico_id = ?
@@ -279,7 +279,7 @@ function crearServicio({ db = pool, reloj = () => new Date() } = {}) {
     const [filas] = await db.query('SELECT id FROM medicos WHERE id = ?', [id]);
     if (!filas.length) throw new ErrorMedicos(404, 'Médico no encontrado.');
     const [citas] = await db.query(
-      `SELECT cita_id AS id, fecha, hora, estado, paciente,
+      `SELECT cita_id AS id, fecha, hora, estado, paciente, paciente_id,
               medico_inactivo, fuera_de_disponibilidad, motivo_revision
          FROM v_citas_por_revisar
         WHERE medico_id = ?

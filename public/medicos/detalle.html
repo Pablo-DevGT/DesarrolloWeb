@@ -146,7 +146,7 @@
                 <tr>
                   <td>${formatearFecha(c.fecha)}</td>
                   <td>${escaparHTML(c.hora)}</td>
-                  <td>${escaparHTML(c.paciente)}</td>
+                  <td>${enlacePaciente(c)}</td>
                   <td>${etiquetaEstado(c.estado)}</td>
                   <td><span class="motivo-revision">${escaparHTML(c.motivo_revision)}</span></td>
                 </tr>`).join('')}
