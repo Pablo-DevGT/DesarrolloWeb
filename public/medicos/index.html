@@ -122,8 +122,8 @@
             : '<span class="ayuda">Sin horarios</span>'}</td>
           <td>${etiquetaActivo(m.activo)}</td>
           <td>
-            <div class="acciones">
-              <a class="btn btn-secundario btn-chico" href="/medicos/detalle.html?id=${m.id}">Ver y horarios</a>
+            <div class="acciones acciones-tabla">
+              <a class="btn btn-secundario btn-chico" href="/medicos/detalle.html?id=${m.id}">Ver detalles</a>
               <a class="btn btn-secundario btn-chico" href="/medicos/formulario.html?id=${m.id}">Editar</a>
               <button type="button" class="btn btn-chico ${Number(m.activo) ? 'btn-secundario' : ''}"
                       data-estado="${m.id}">${Number(m.activo) ? 'Desactivar' : 'Activar'}</button>

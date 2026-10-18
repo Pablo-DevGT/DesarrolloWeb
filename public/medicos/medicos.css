@@ -25,6 +25,14 @@
   margin-bottom: 16px;
 }
 .acciones { display: flex; gap: 6px; flex-wrap: wrap; }
+/* Botones del listado: apilados, con la misma anchura y alineados en todas las
+   filas y en cualquier tamaño de pantalla (en fila no caben sin estrechar la tabla) */
+.acciones-tabla {
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 7.5rem;
+}
+.acciones-tabla .btn { width: 100%; text-align: center; white-space: nowrap; }
 .fila-inactiva td { color: var(--color-texto-suave); }
 .ayuda { font-size: 0.8rem; color: var(--color-texto-suave); }
 .resumen { color: var(--color-texto-suave); font-size: 0.9rem; margin: 0 0 8px; }
