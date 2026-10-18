@@ -83,12 +83,62 @@
         su estado y las operaciones para confirmar,
         cancelar o reagendar.
       </p>
-      <p id="estado-citas">
-        Pendiente de conectar con la API de recepción.
-      </p>
+        <div id="estado-citas">
+            Cargando citas...
+        </div>
     </section>
   </main>
 
   <script src="/comun/comun.js"></script>
+  
+<script>
+  async function cargarCitas() {
+    const contenedor = document.getElementById('estado-citas');
+
+    try {
+      const respuesta = await api('/api/recepcion/citas');
+      const citas = respuesta.citas;
+
+      if (!citas.length) {
+        contenedor.textContent = 'No hay citas registradas.';
+        return;
+      }
+
+      const filas = citas.map(cita => `
+        <tr>
+          <td>${escaparHTML(cita.paciente)}</td>
+          <td>${escaparHTML(cita.medico)}</td>
+          <td>${formatearFecha(cita.fecha)}</td>
+          <td>${escaparHTML(cita.hora)}</td>
+          <td>${etiquetaEstado(cita.estado)}</td>
+        </tr>
+      `).join('');
+
+      contenedor.innerHTML = `
+        <div style="overflow-x:auto">
+          <table style="width:100%; border-collapse:collapse">
+            <thead>
+              <tr>
+                <th>Paciente</th>
+                <th>Médico</th>
+                <th>Fecha</th>
+                <th>Hora</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>${filas}</tbody>
+          </table>
+        </div>
+      `;
+
+    } catch (error) {
+      contenedor.textContent =
+        error.mensajes?.join(', ') ||
+        'No se pudieron cargar las citas.';
+    }
+  }
+
+  cargarCitas();
+</script>
 </body>
 </html>

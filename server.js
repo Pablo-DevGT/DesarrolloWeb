@@ -25,7 +25,7 @@ app.use('/api/pacientes', auth.requiereRol(['admin'], { publico: [{ metodo: 'GET
   require('./src/pacientes/pacientes.routes')); // Integrante 2
 app.use('/api/medicos', soloAdmin, require('./src/medicos/medicos.routes')); // Integrante 1
 app.use('/api/citas', require('./src/citas/citas.routes')); // Integrante 3 (pública)
-// app.use('/api/recepcion', soloAdmin, require('./src/recepcion/recepcion.routes')); // Integrante 4
+app.use('/api/recepcion', soloAdmin, require('./src/recepcion/recepcion.routes')); // Integrante 4
 // app.use('/api/agenda', auth.requiereRol(['admin', 'doctor']), require('./src/agenda/agenda.routes')); // Integrante 5
 
 app.get('/', (req, res) => res.redirect(auth.inicioDe(req.usuario)));
