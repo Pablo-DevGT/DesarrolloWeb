@@ -111,6 +111,17 @@
           <td>${formatearFecha(cita.fecha)}</td>
           <td>${escaparHTML(cita.hora)}</td>
           <td>${etiquetaEstado(cita.estado)}</td>
+          
+            <td>
+        ${cita.estado === 'pendiente'
+            ? `<button type="button" onclick="confirmarCita(${Number(cita.id)})">Confirmar</button>`
+            : ''}
+
+        ${['pendiente', 'confirmada', 'reagendada'].includes(cita.estado)
+            ? `<button type="button" onclick="cancelarCita(${Number(cita.id)})">Cancelar</button>`
+            : '—'}
+            </td>
+
         </tr>
       `).join('');
 
@@ -124,6 +135,7 @@
                 <th>Fecha</th>
                 <th>Hora</th>
                 <th>Estado</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>${filas}</tbody>
@@ -139,6 +151,55 @@
   }
 
   cargarCitas();
+  
+  async function confirmarCita(id) {
+    const aceptar = confirm('¿Deseas confirmar esta cita?');
+
+    if (!aceptar) return;
+
+    try {
+      await api(`/api/recepcion/citas/${id}/confirmar`, {
+        method: 'PATCH'
+      });
+
+      alert('Cita confirmada correctamente.');
+      await cargarCitas();
+
+    } catch (error) {
+      alert(error.message || 'No se pudo confirmar la cita.');
+    }
+  }
+
+async function cancelarCita(id) {
+  const aceptar = confirm(
+    '¿Estás seguro de que deseas cancelar esta cita?'
+  );
+
+  if (!aceptar) {
+    return;
+  }
+
+  try {
+    await api(`/api/recepcion/citas/${id}/cancelar`, {
+      method: 'PATCH'
+    });
+
+    alert('Cita cancelada correctamente.');
+    await cargarCitas();
+
+  } catch (error) {
+    alert(
+      error.mensajes?.join(', ') ||
+      error.message ||
+      'No se pudo cancelar la cita.'
+    );
+  }
+}
+
+  cargarCitas();
+</script>
+</body>
+</html>
 </script>
 </body>
 </html>
