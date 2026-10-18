@@ -5,6 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Solicitud de Cita Médica · Sistema de Citas</title>
   <link rel="stylesheet" href="/comun/estilos.css">
+  <style>
+    .aviso-horarios {
+      margin: 8px 0 0;
+      padding: 10px 12px;
+      border-left: 4px solid var(--color-primario);
+      border-radius: var(--radio);
+      background: var(--color-acento);
+      color: var(--color-primario-oscuro);
+      font-size: 0.9rem;
+    }
+  </style>
 </head>
 <body>
   <header id="menu" data-activo="citas"></header>
@@ -38,6 +49,9 @@
           <select id="hora" name="hora" required disabled>
             <option value="">Selecciona médico y fecha</option>
           </select>
+          <p id="sin-horarios" class="aviso-horarios oculto" role="status" aria-live="polite">
+            No hay horarios disponibles para esta fecha. Por favor, selecciona otro día
+          </p>
           <span class="ayuda">Cada cita tiene una duración de 60 minutos.</span>
         </div>
         <div class="campo completo">
@@ -59,6 +73,7 @@
     const selectorMedico = document.getElementById('medico_id');
     const selectorFecha = document.getElementById('fecha');
     const selectorHora = document.getElementById('hora');
+    const avisoHorarios = document.getElementById('sin-horarios');
     const alerta = document.getElementById('alerta');
     const botonSolicitar = document.getElementById('solicitar');
     let cargaHorarios = 0;
@@ -82,6 +97,8 @@
     async function cargarHorarios({ silencioso = false } = {}) {
       const cargaActual = ++cargaHorarios;
       selectorHora.disabled = true;
+      selectorHora.hidden = false;
+      avisoHorarios.classList.add('oculto');
       actualizarBoton();
       selectorHora.innerHTML = '<option value="">Cargando horarios…</option>';
       if (!selectorMedico.value || !selectorFecha.value) {
@@ -103,6 +120,8 @@
             ).join('')
           : '<option value="">No hay horarios disponibles</option>';
         selectorHora.disabled = !resultado.horarios.length;
+        selectorHora.hidden = !resultado.horarios.length;
+        avisoHorarios.classList.toggle('oculto', Boolean(resultado.horarios.length));
         actualizarBoton();
         return true;
       } catch (error) {
