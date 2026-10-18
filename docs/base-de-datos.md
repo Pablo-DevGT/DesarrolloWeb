@@ -13,6 +13,8 @@ o desde la terminal con `mysql -u root -p < database/01_esquema.sql`, etc.):
 | 2 | `02_pacientes.sql` | `pacientes` | — |
 | 3 | `03_citas_disponibilidad.sql` | `disponibilidad_medicos`, `citas`, `bloqueos_agenda`, `sp_validar_cita`, `sp_validar_disponibilidad`, sus triggers y la vista `v_citas_por_revisar` | `medicos`, `pacientes` |
 | 4 | `04_datos_prueba.sql` | Datos de prueba (opcional, no usar en producción) | 1–3 |
+| 5 | `05_usuarios.sql` | `usuarios` (login y roles) | `medicos` |
+| 6 | `06_usuarios_prueba.sql` | Usuarios de prueba (opcional, no usar en producción) | 4–5 |
 | — | `verificar_esquema.sql` | Nada: consultas de comprobación de solo lectura | 1–3 |
 
 Todos los scripts se pueden volver a ejecutar: las tablas usan `IF NOT EXISTS`, el
@@ -76,6 +78,24 @@ Reglas (triggers, ver [Reglas de los horarios](#reglas-de-los-horarios-de-atenci
 | `creado_en`, `actualizado_en` | TIMESTAMP | Automáticos |
 
 Estados **activos** (ocupan horario): `pendiente`, `confirmada`, `reagendada`.
+
+### `usuarios`
+
+Login y roles (Integrante 5, [login-roles.md](login-roles.md)). Depende solo de `medicos`.
+
+| Columna | Tipo | Notas |
+| --- | --- | --- |
+| `id` | INT PK | |
+| `usuario` | VARCHAR(60) | Nombre de inicio de sesión, en minúsculas, **único** |
+| `nombre` | VARCHAR(120) | Nombre para mostrar |
+| `contrasena_hash` | VARCHAR(255) | `scrypt$<sal>$<hash>`; nunca la contraseña en texto plano |
+| `rol` | ENUM | `admin` (recepcionista) o `doctor` |
+| `medico_id` | INT FK → `medicos` | Obligatorio si `rol = 'doctor'`, NULL si `admin` (`chk_usuario_rol_medico`); **único**: un usuario por médico |
+| `activo` | TINYINT(1) | 0 = no puede iniciar sesión |
+| `creado_en`, `actualizado_en` | TIMESTAMP | Automáticos |
+
+No se puede borrar un médico con usuario (`ON DELETE RESTRICT`); como los médicos no se borran
+sino que se desactivan, basta con desactivar también al usuario.
 
 ### `bloqueos_agenda`
 

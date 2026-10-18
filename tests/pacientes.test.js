@@ -49,6 +49,8 @@ describe('API /api/pacientes', () => {
         historial: async (id, filtros) => [{ id: 1, fecha: '2026-10-20', hora: '10:00', estado: filtros.estado || 'confirmada', medico: 'Dra. Ruiz', especialidad: 'Pediatría', motivo: 'Control' }],
       },
     };
+    // La API de pacientes exige sesión de admin (login y roles, Integrante 5)
+    require('./ayudas/sesion').simularSesion();
     const app = require('../server');
     servidor = app.listen(0);
     base = `http://localhost:${servidor.address().port}/api/pacientes`;

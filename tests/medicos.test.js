@@ -458,6 +458,8 @@ describe('rutas /api/medicos', () => {
       '../src/medicos/medicos.routes', '../server']) {
       delete require.cache[require.resolve(archivo)];
     }
+    // La API de médicos exige sesión de admin (login y roles, Integrante 5)
+    require('./ayudas/sesion').simularSesion();
     const app = require('../server');
     servidor = app.listen(0);
     await new Promise((resolve) => servidor.once('listening', resolve));

@@ -6,6 +6,10 @@
 async function peticion(url, opciones = {}) {
   const resp = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opciones });
   const datos = await resp.json().catch(() => ({}));
+  if (resp.status === 401) {
+    // La sesión venció: volver al login y regresar aquí después (login y roles)
+    location.href = `/login.html?volver=${encodeURIComponent(location.pathname + location.search)}`;
+  }
   if (!resp.ok) {
     const error = new Error('Error de la API');
     error.status = resp.status;
