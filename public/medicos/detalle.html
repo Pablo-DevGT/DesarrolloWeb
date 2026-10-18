@@ -76,6 +76,7 @@
         </form>
         <div id="alerta-horario" class="oculto" role="alert" style="margin-top: 12px;"></div>
 
+        <div id="aviso-horarios" class="alerta alerta-info oculto" style="margin-top: 16px;"></div>
         <div class="semana" id="semana" style="margin-top: 16px;"></div>
       </div>
     </section>
@@ -160,6 +161,14 @@
     }
 
     function pintarHorarios() {
+      // Sin horarios activos el médico no aparece en Solicitud de Citas: explicarlo
+      const activos = medico.horarios.filter((h) => Number(h.activo)).length;
+      const aviso = document.getElementById('aviso-horarios');
+      aviso.classList.toggle('oculto', activos > 0);
+      aviso.textContent = medico.horarios.length
+        ? 'Todos los horarios de este médico están inactivos: no aparecerá en Solicitud de Citas hasta que actives o agregues uno.'
+        : 'Este médico aún no tiene horarios de atención: no aparecerá en Solicitud de Citas hasta que agregues uno con el formulario de arriba.';
+
       document.getElementById('semana').innerHTML = DIAS.slice(1).map((nombreDia, i) => {
         const rangos = medico.horarios.filter((h) => h.dia_semana === i + 1);
         return `
