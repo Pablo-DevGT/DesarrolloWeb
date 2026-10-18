@@ -36,6 +36,57 @@
       margin-top: 30px;
     }
   </style>
+  
+<style>
+  #estado-citas table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+  }
+
+  #estado-citas th,
+  #estado-citas td {
+    padding: 12px 10px;
+    text-align: left;
+    border-bottom: 1px solid #dce4e7;
+  }
+
+  #estado-citas th {
+    background-color: #edf4f4;
+    color: #16494a;
+  }
+
+  #estado-citas button,
+  #formulario-reagendar button {
+    background-color: #087779;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 3px;
+    cursor: pointer;
+  }
+
+  #estado-citas button:hover,
+  #formulario-reagendar button:hover {
+    background-color: #075c5e;
+  }
+
+  #formulario-reagendar:not([hidden]) {
+    margin-top: 20px;
+    padding: 20px;
+    border: 1px solid #dce4e7;
+    border-radius: 8px;
+    background-color: white;
+  }
+
+  #formulario-reagendar input {
+    padding: 9px;
+    margin: 8px;
+    max-width: 180px;
+  }
+</style>
+
 </head>
 <body>
   <header id="menu" data-activo="recepcion"></header>
@@ -79,9 +130,9 @@
     <section class="panel-tarjeta panel-seccion">
       <h2>Seguimiento de citas</h2>
       <p>
-        Aquí se incorporará el listado de citas,
-        su estado y las operaciones para confirmar,
-        cancelar o reagendar.
+        Consulta y administra las citas del consultorio.
+        Puedes confirmar, cancelar o reagendar
+        según la disponibilidad del médico.
       </p>
         <div id="estado-citas">
             Cargando citas...
