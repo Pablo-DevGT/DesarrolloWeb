@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Médicos · Sistema de Citas</title>
+  <link rel="stylesheet" href="/comun/estilos.css">
+  <link rel="stylesheet" href="/medicos/medicos.css">
+</head>
+<body>
+  <header id="menu" data-activo="medicos"></header>
+
+  <main class="contenedor">
+    <div class="barra-acciones">
+      <div>
+        <h1>Médicos</h1>
+        <p class="subtitulo">Registra médicos, administra sus horarios de atención y actívalos o desactívalos.</p>
+      </div>
+      <a class="btn" href="/medicos/formulario.html">+ Registrar médico</a>
+    </div>
+
+    <div id="alerta" class="oculto" role="status" aria-live="polite"></div>
+
+    <form class="filtros" id="filtros" role="search">
+      <div class="campo">
+        <label for="buscar">Buscar</label>
+        <input id="buscar" name="q" type="search" maxlength="120"
+               placeholder="Nombre, especialidad o número de colegiado">
+      </div>
+      <div class="campo">
+        <label for="especialidad">Especialidad</label>
+        <select id="especialidad" name="especialidad">
+          <option value="">Todas</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="estado">Estado</label>
+        <select id="estado" name="activo">
+          <option value="">Todos</option>
+          <option value="1">Activos</option>
+          <option value="0">Inactivos</option>
+        </select>
+      </div>
+      <button type="button" class="btn btn-secundario" id="limpiar">Limpiar filtros</button>
+    </form>
+
+    <p class="resumen" id="resumen"></p>
+
+    <div class="tarjeta tabla-contenedor">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Colegiado</th>
+            <th>Especialidad</th>
+            <th>Contacto</th>
+            <th>Horarios</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="filas">
+          <tr><td colspan="7" class="vacio">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="/comun/comun.js"></script>
+  <script src="/medicos/reglas.js"></script>
+  <script src="/medicos/medicos.js"></script>
+  <script>
+    const filas = document.getElementById('filas');
+    const alerta = document.getElementById('alerta');
+    const resumen = document.getElementById('resumen');
+    const filtros = document.getElementById('filtros');
+    const selectorEspecialidad = document.getElementById('especialidad');
+    let medicos = [];
+
+    async function cargarEspecialidades() {
+      try {
+        const lista = await peticion('/api/medicos/especialidades');
+        const actual = selectorEspecialidad.value;
+        selectorEspecialidad.innerHTML = '<option value="">Todas</option>' +
+          lista.map((e) => `<option value="${escaparHTML(e)}">${escaparHTML(e)}</option>`).join('');
+        selectorEspecialidad.value = lista.includes(actual) ? actual : '';
+      } catch {
+        // El filtro es opcional: si falla, el listado sigue funcionando
+      }
+    }
+
+    async function cargar() {
+      const parametros = new URLSearchParams(new FormData(filtros));
+      try {
+        medicos = await peticion(`/api/medicos?${parametros}`);
+        pintar();
+      } catch (err) {
+        mostrarAlerta(alerta, 'error', err.mensajes || 'No se pudo cargar la lista de médicos.');
+        filas.innerHTML = '';
+        resumen.textContent = '';
+      }
+    }
+
+    function pintar() {
+      const activos = medicos.filter((m) => Number(m.activo)).length;
+      resumen.textContent = medicos.length
+        ? `${medicos.length} médico(s): ${activos} activo(s), ${medicos.length - activos} inactivo(s).`
+        : '';
+      if (!medicos.length) {
+        filas.innerHTML = '<tr><td colspan="7" class="vacio">No hay médicos que coincidan con la búsqueda.</td></tr>';
+        return;
+      }
+      filas.innerHTML = medicos.map((m) => `
+        <tr class="${Number(m.activo) ? '' : 'fila-inactiva'}">
+          <td><a href="/medicos/detalle.html?id=${m.id}">${escaparHTML(m.nombre)}</a></td>
+          <td>${escaparHTML(m.colegiado)}</td>
+          <td>${escaparHTML(m.especialidad)}</td>
+          <td>${m.telefono ? escaparHTML(m.telefono) : ''}${m.email ? `<br><small>${escaparHTML(m.email)}</small>` : ''}
+              ${!m.telefono && !m.email ? '<span class="ayuda">Sin datos</span>' : ''}</td>
+          <td>${Number(m.horarios_activos)
+            ? `${m.horarios_activos} activo(s)`
+            : '<span class="ayuda">Sin horarios</span>'}</td>
+          <td>${etiquetaActivo(m.activo)}</td>
+          <td>
+            <div class="acciones acciones-tabla">
+              <a class="btn btn-secundario btn-chico" href="/medicos/detalle.html?id=${m.id}">Ver detalles</a>
+              <a class="btn btn-secundario btn-chico" href="/medicos/formulario.html?id=${m.id}">Editar</a>
+              <button type="button" class="btn btn-chico ${Number(m.activo) ? 'btn-secundario' : ''}"
+                      data-estado="${m.id}">${Number(m.activo) ? 'Desactivar' : 'Activar'}</button>
+            </div>
+          </td>
+        </tr>`).join('');
+    }
+
+    async function cambiarEstado(boton, medico) {
+      boton.disabled = true;
+      ocultarAlerta(alerta);
+      try {
+        const cambio = await cambiarEstadoMedico(medico);
+        if (!cambio) return;
+        mostrarAlerta(alerta, cambio.tipo, cambio.mensaje);
+        await cargar();
+      } catch (err) {
+        mostrarAlerta(alerta, 'error', err.mensajes);
+      } finally {
+        boton.disabled = false;
+      }
+    }
+
+    filas.addEventListener('click', (e) => {
+      const boton = e.target.closest('button[data-estado]');
+      if (!boton) return;
+      const medico = medicos.find((m) => m.id === Number(boton.dataset.estado));
+      if (medico) cambiarEstado(boton, medico);
+    });
+
+    let espera;
+    filtros.addEventListener('input', (e) => {
+      clearTimeout(espera);
+      espera = setTimeout(cargar, e.target.id === 'buscar' ? 300 : 0);
+    });
+    filtros.addEventListener('submit', (e) => e.preventDefault());
+    document.getElementById('limpiar').addEventListener('click', () => {
+      filtros.reset();
+      cargar();
+    });
+
+    mensajeDeURL(alerta, { guardado: 'Médico guardado correctamente.' });
+    cargarEspecialidades();
+    cargar();
+  </script>
+</body>
+</html>

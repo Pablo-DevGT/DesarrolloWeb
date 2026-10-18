@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solicitud de Cita Médica · Sistema de Citas</title>
+  <link rel="stylesheet" href="/comun/estilos.css">
+</head>
+<body>
+  <header id="menu" data-activo="citas"></header>
+
+  <main class="contenedor">
+    <h1>Solicitud de Cita Médica</h1>
+    <p class="subtitulo">Selecciona un paciente, médico y horario para enviar la solicitud.</p>
+
+    <div id="alerta" class="oculto" role="status" aria-live="polite"></div>
+
+    <form id="formulario" class="tarjeta" novalidate>
+      <div class="form-grid">
+        <div class="campo">
+          <label for="paciente_id">Paciente *</label>
+          <select id="paciente_id" name="paciente_id" required>
+            <option value="">Cargando pacientes…</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="medico_id">Médico *</label>
+          <select id="medico_id" name="medico_id" required>
+            <option value="">Cargando médicos…</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="fecha">Fecha de atención *</label>
+          <input id="fecha" name="fecha" type="date" required>
+        </div>
+        <div class="campo">
+          <label for="hora">Horario disponible *</label>
+          <select id="hora" name="hora" required disabled>
+            <option value="">Selecciona médico y fecha</option>
+          </select>
+          <span class="ayuda">Cada cita tiene una duración de 60 minutos.</span>
+        </div>
+        <div class="campo completo">
+          <label for="motivo">Motivo de consulta *</label>
+          <textarea id="motivo" name="motivo" required minlength="3" maxlength="255"
+                    placeholder="Describe brevemente el motivo de la consulta."></textarea>
+        </div>
+      </div>
+      <div style="margin-top: 20px; display: flex; gap: 12px; align-items: center;">
+        <button class="btn" type="submit" id="solicitar" disabled>Solicitar Cita</button>
+      </div>
+    </form>
+  </main>
+
+  <script src="/comun/comun.js"></script>
+  <script>
+    const formulario = document.getElementById('formulario');
+    const selectorPaciente = document.getElementById('paciente_id');
+    const selectorMedico = document.getElementById('medico_id');
+    const selectorFecha = document.getElementById('fecha');
+    const selectorHora = document.getElementById('hora');
+    const alerta = document.getElementById('alerta');
+    const botonSolicitar = document.getElementById('solicitar');
+    let cargaHorarios = 0;
+    let opcionesListas = false;
+
+    function actualizarBoton() {
+      botonSolicitar.disabled = !opcionesListas ||
+        !selectorPaciente.value || !selectorMedico.value ||
+        !selectorFecha.value || !selectorHora.value;
+    }
+
+    function fechaLocal() {
+      const hoy = new Date();
+      return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+    }
+
+    function mostrarError(error, alternativa) {
+      mostrarAlerta(alerta, 'error', error.mensajes || alternativa);
+    }
+
+    async function cargarHorarios({ silencioso = false } = {}) {
+      const cargaActual = ++cargaHorarios;
+      selectorHora.disabled = true;
+      actualizarBoton();
+      selectorHora.innerHTML = '<option value="">Cargando horarios…</option>';
+      if (!selectorMedico.value || !selectorFecha.value) {
+        selectorHora.innerHTML = '<option value="">Selecciona médico y fecha</option>';
+        return;
+      }
+
+      try {
+        const parametros = new URLSearchParams({
+          medico_id: selectorMedico.value,
+          fecha: selectorFecha.value,
+        });
+        const resultado = await api(`/api/citas/horarios?${parametros}`);
+        if (cargaActual !== cargaHorarios) return;
+        selectorHora.innerHTML = resultado.horarios.length
+          ? '<option value="">Selecciona un horario</option>' +
+            resultado.horarios.map((hora) =>
+              `<option value="${escaparHTML(hora)}">${escaparHTML(hora)}</option>`
+            ).join('')
+          : '<option value="">No hay horarios disponibles</option>';
+        selectorHora.disabled = !resultado.horarios.length;
+        actualizarBoton();
+        return true;
+      } catch (error) {
+        if (cargaActual !== cargaHorarios) return;
+        selectorHora.innerHTML = '<option value="">No se pudieron cargar horarios</option>';
+        actualizarBoton();
+        if (!silencioso) mostrarError(error, 'No se pudieron consultar los horarios.');
+        return false;
+      }
+    }
+
+    async function cargarOpciones() {
+      selectorFecha.min = fechaLocal();
+      try {
+        const [pacientes, medicos] = await Promise.all([
+          api('/api/pacientes'),
+          api('/api/citas/medicos'),
+        ]);
+        selectorPaciente.innerHTML = '<option value="">Selecciona un paciente</option>' +
+          pacientes.map((paciente) =>
+            `<option value="${paciente.id}">${escaparHTML(paciente.nombre)}</option>`
+          ).join('');
+        selectorMedico.innerHTML = '<option value="">Selecciona un médico</option>' +
+          medicos.map((medico) =>
+            `<option value="${medico.id}">${escaparHTML(medico.nombre)} · ${escaparHTML(medico.especialidad)}</option>`
+          ).join('');
+        if (!pacientes.length) {
+          selectorPaciente.innerHTML = '<option value="">No hay pacientes registrados</option>';
+        }
+        if (!medicos.length) {
+          selectorMedico.innerHTML = '<option value="">No hay médicos con horarios configurados</option>';
+        }
+        opcionesListas = Boolean(pacientes.length && medicos.length);
+        actualizarBoton();
+      } catch (error) {
+        mostrarError(error, 'No se pudieron cargar pacientes y médicos.');
+      }
+    }
+
+    selectorMedico.addEventListener('change', () => cargarHorarios());
+    selectorFecha.addEventListener('change', () => cargarHorarios());
+    selectorPaciente.addEventListener('change', actualizarBoton);
+    selectorHora.addEventListener('change', actualizarBoton);
+
+    formulario.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      ocultarAlerta(alerta);
+      if (!formulario.checkValidity()) {
+        formulario.reportValidity();
+        return;
+      }
+
+      botonSolicitar.disabled = true;
+      try {
+        const cita = await api('/api/citas', {
+          method: 'POST',
+          body: JSON.stringify(Object.fromEntries(new FormData(formulario))),
+        });
+        const horariosActualizados = await cargarHorarios({ silencioso: true });
+        mostrarAlerta(
+          alerta,
+          'exito',
+          `Solicitud registrada correctamente con el número ${cita.id}. Su estado es pendiente.` +
+            (horariosActualizados ? '' : ' No se pudo actualizar la disponibilidad; vuelve a cargarla.')
+        );
+        formulario.elements.motivo.value = '';
+        selectorHora.value = '';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (error) {
+        if (error.mensajes && error.mensajes.some((mensaje) => mensaje.includes('ocupado'))) {
+          await cargarHorarios({ silencioso: true });
+          mostrarAlerta(alerta, 'error', 'Ese horario acaba de ser reservado. Se actualizó la disponibilidad; selecciona otro.');
+        } else {
+          mostrarError(error, 'No se pudo registrar la solicitud.');
+        }
+      } finally {
+        actualizarBoton();
+      }
+    });
+
+    cargarOpciones();
+  </script>
+</body>
+</html>

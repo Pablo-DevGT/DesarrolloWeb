@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Historial de citas · Sistema de Citas</title>
+  <link rel="stylesheet" href="/comun/estilos.css">
+</head>
+<body>
+  <header id="menu" data-activo="pacientes"></header>
+
+  <main class="contenedor">
+    <a href="/pacientes/" class="ayuda">← Volver a pacientes</a>
+    <h1 id="titulo">Historial de citas</h1>
+    <p class="subtitulo" id="datos-paciente"></p>
+
+    <div id="alerta" class="oculto"></div>
+
+    <form id="filtros" class="tarjeta form-grid">
+      <div class="campo">
+        <label for="estado">Estado</label>
+        <select id="estado" name="estado">
+          <option value="">Todos</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="confirmada">Confirmada</option>
+          <option value="reagendada">Reagendada</option>
+          <option value="cancelada">Cancelada</option>
+          <option value="atendida">Atendida</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="desde">Desde</label>
+        <input id="desde" name="desde" type="date">
+      </div>
+      <div class="campo">
+        <label for="hasta">Hasta</label>
+        <input id="hasta" name="hasta" type="date">
+      </div>
+      <div class="campo" style="justify-content: end;">
+        <button type="button" id="limpiar" class="btn btn-secundario">Limpiar filtros</button>
+      </div>
+    </form>
+
+    <div class="tarjeta tabla-contenedor">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Hora</th>
+            <th>Doctor</th>
+            <th>Especialidad</th>
+            <th>Motivo</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody id="filas">
+          <tr><td colspan="6" class="vacio">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="/comun/comun.js"></script>
+  <script>
+    const id = new URLSearchParams(location.search).get('id');
+    const filtros = document.getElementById('filtros');
+    const filas = document.getElementById('filas');
+    const alerta = document.getElementById('alerta');
+
+    async function cargar() {
+      if (!id) {
+        mostrarAlerta(alerta, 'error', 'Falta el paciente. Ábrelo desde la lista de pacientes.');
+        filas.innerHTML = '';
+        return;
+      }
+      const parametros = new URLSearchParams();
+      for (const [clave, valor] of new FormData(filtros)) {
+        if (valor) parametros.append(clave, valor);
+      }
+
+      try {
+        const { paciente, citas } = await api(
+          `/api/pacientes/${encodeURIComponent(id)}/historial?${parametros}`
+        );
+        ocultarAlerta(alerta);
+        document.getElementById('titulo').textContent = `Historial de ${paciente.nombre}`;
+        document.getElementById('datos-paciente').innerHTML =
+          `${paciente.edad} años · ${escaparHTML(paciente.telefono)} · Alergias: ` +
+          (paciente.alergias
+            ? `<span class="alergia">${escaparHTML(paciente.alergias)}</span>`
+            : 'ninguna conocida');
+
+        if (!citas.length) {
+          filas.innerHTML = '<tr><td colspan="6" class="vacio">No hay citas con estos filtros.</td></tr>';
+          return;
+        }
+        filas.innerHTML = citas.map((c) => `
+          <tr>
+            <td>${formatearFecha(c.fecha)}</td>
+            <td>${escaparHTML(c.hora)}</td>
+            <td>${escaparHTML(c.medico)}</td>
+            <td>${escaparHTML(c.especialidad)}</td>
+            <td>${escaparHTML(c.motivo)}</td>
+            <td>${etiquetaEstado(c.estado)}</td>
+          </tr>`).join('');
+      } catch (err) {
+        mostrarAlerta(alerta, 'error', err.mensajes);
+        filas.innerHTML = '';
+      }
+    }
+
+    filtros.addEventListener('change', cargar);
+    document.getElementById('limpiar').addEventListener('click', () => {
+      filtros.reset();
+      cargar();
+    });
+    cargar();
+  </script>
+</body>
+</html>

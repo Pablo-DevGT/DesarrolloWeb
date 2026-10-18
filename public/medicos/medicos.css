@@ -1,0 +1,134 @@
+/* Estilos propios del módulo de médicos. La base es /comun/estilos.css */
+:root {
+  --color-advertencia-fondo: #fff4d6;
+  --color-advertencia: #7a5600;
+  --color-info-fondo: #dde9fb;
+  --color-info: #1f4f99;
+}
+
+.estado-activo   { background: #dcf3e3; color: #1e6b37; }
+.estado-inactivo { background: #e6e9eb; color: #3d4a4f; }
+
+.alerta-advertencia { background: var(--color-advertencia-fondo); color: var(--color-advertencia); }
+.alerta-info { background: var(--color-info-fondo); color: var(--color-info); }
+
+.btn-peligro { background: var(--color-error); border-color: var(--color-error); }
+.btn-peligro:hover { background: #8f1f19; }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Barra de búsqueda y filtros */
+.filtros {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(160px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+.acciones { display: flex; gap: 6px; flex-wrap: wrap; }
+/* Botones del listado: apilados, con la misma anchura y alineados en todas las
+   filas y en cualquier tamaño de pantalla (en fila no caben sin estrechar la tabla) */
+.acciones-tabla {
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 7.5rem;
+}
+.acciones-tabla .btn { width: 100%; text-align: center; white-space: nowrap; }
+.fila-inactiva td { color: var(--color-texto-suave); }
+.ayuda { font-size: 0.8rem; color: var(--color-texto-suave); }
+.resumen { color: var(--color-texto-suave); font-size: 0.9rem; margin: 0 0 8px; }
+
+/* Ficha del médico */
+.ficha-cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.ficha-cabecera h1 { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.datos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+}
+.datos dt { font-size: 0.8rem; font-weight: 600; color: var(--color-texto-suave); text-transform: uppercase; }
+.datos dd { margin: 2px 0 0; word-break: break-word; }
+
+/* Citas por revisar */
+.tarjeta.con-pendientes { border-left: 4px solid var(--color-advertencia); }
+.contador {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--color-advertencia-fondo);
+  color: var(--color-advertencia);
+  font-size: 0.85rem;
+  text-align: center;
+  vertical-align: middle;
+}
+.motivo-revision {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--color-advertencia-fondo);
+  color: var(--color-advertencia);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+#tarjeta-revision .vacio { text-align: left; padding: 4px 0; }
+
+/* Horarios por día */
+.tarjeta h2 { font-size: 1.15rem; margin: 0 0 12px; }
+.semana {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+.dia {
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio);
+  padding: 12px;
+  background: #fbfcfc;
+}
+.dia h3 { margin: 0 0 8px; font-size: 0.95rem; }
+.dia .vacio { padding: 4px 0; text-align: left; font-size: 0.85rem; }
+.rango {
+  border-top: 1px solid var(--color-borde);
+  padding: 8px 0;
+}
+.rango:first-of-type { border-top: 0; padding-top: 0; }
+.rango-horas { font-weight: 600; font-variant-numeric: tabular-nums; }
+.rango.inactivo .rango-horas { text-decoration: line-through; color: var(--color-texto-suave); }
+.rango .acciones { margin-top: 6px; }
+.rango.editando { background: var(--color-acento); margin: 0 -12px; padding: 8px 12px; }
+
+.form-horario {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+}
+.form-horario .botones { display: flex; gap: 8px; }
+
+/* Diálogo de confirmación */
+.dialogo {
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio);
+  padding: 20px;
+  max-width: min(640px, calc(100vw - 32px));
+  width: 100%;
+  color: var(--color-texto);
+}
+.dialogo::backdrop { background: rgba(15, 30, 35, 0.45); }
+.dialogo h2 { margin: 0 0 8px; font-size: 1.2rem; }
+.dialogo .tabla-contenedor { max-height: 260px; overflow: auto; margin: 12px 0; }
+.dialogo-acciones { display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+.tabla-compacta th, .tabla-compacta td { padding: 6px 10px; }
+
+@media (max-width: 760px) {
+  .filtros, .form-horario { grid-template-columns: 1fr; }
+  .form-horario .botones { justify-content: flex-start; }
+}
