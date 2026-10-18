@@ -96,4 +96,77 @@ router.patch('/citas/:id/cancelar', async (req, res, next) => {
   }
 });
 
+router.patch('/citas/:id/reagendar', async (req, res, next) => {
+  const id = Number(req.params.id);
+  const { fecha, hora } = req.body || {};
+
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return res.status(400).json({
+      error: 'El ID de la cita no es válido.'
+    });
+  }
+
+  if (typeof fecha !== 'string' ||
+      typeof hora !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(fecha) ||
+      !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) {
+    return res.status(400).json({
+      error: 'Ingresá una fecha y hora válidas.'
+    });
+  }
+
+  const fechaComprobacion = new Date(`${fecha}T00:00:00Z`);
+
+  if (Number.isNaN(fechaComprobacion.getTime()) ||
+      fechaComprobacion.toISOString().slice(0, 10) !== fecha) {
+    return res.status(400).json({
+      error: 'La fecha ingresada no existe.'
+    });
+  }
+
+  try {
+    const [resultado] = await db.query(
+      `UPDATE citas
+       SET fecha = ?, hora = ?, estado = 'reagendada'
+       WHERE id = ?
+         AND estado IN ('pendiente', 'confirmada', 'reagendada')
+         AND TIMESTAMP(fecha, hora) > NOW()
+         AND TIMESTAMP(?, ?) > NOW()
+         AND (fecha <> ? OR hora <> ?)`,
+      [fecha, hora, id, fecha, hora, fecha, hora]
+    );
+
+    if (resultado.affectedRows === 0) {
+      return res.status(409).json({
+        error: 'No se puede reagendar esta cita. Revisá su estado, fecha y hora.'
+      });
+    }
+
+    res.json({
+      mensaje: 'Cita reagendada correctamente.'
+    });
+
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({
+        error: 'El médico o el paciente ya tiene una cita en ese horario.'
+      });
+    }
+
+    if (error.code === 'ER_SIGNAL_EXCEPTION') {
+      return res.status(409).json({
+        error: 'El nuevo horario no está disponible o el médico está inactivo.'
+      });
+    }
+
+    if (['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT'].includes(error.code)) {
+      return res.status(503).json({
+        error: 'Hubo un conflicto temporal. Intentá nuevamente.'
+      });
+    }
+
+    next(error);
+  }
+});
+
 module.exports = router;

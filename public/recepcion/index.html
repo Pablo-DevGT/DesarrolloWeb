@@ -86,6 +86,34 @@
         <div id="estado-citas">
             Cargando citas...
         </div>
+        
+        <form id="formulario-reagendar" hidden>
+        <h3>Reagendar cita</h3>
+        <p>Seleccioná la nueva fecha y hora de atención.</p>
+
+        <label for="fecha-reagendar">Nueva fecha</label>
+        <input
+            type="date"
+            id="fecha-reagendar"
+            required
+        >
+
+        <label for="hora-reagendar">Nueva hora</label>
+        <input
+            type="time"
+            id="hora-reagendar"
+            required
+        >
+
+        <button type="submit">
+            Guardar nuevo horario
+        </button>
+
+        <button type="button" id="cerrar-reagendar">
+            Cerrar
+        </button>
+        </form>
+
     </section>
   </main>
 
@@ -111,14 +139,21 @@
           <td>${formatearFecha(cita.fecha)}</td>
           <td>${escaparHTML(cita.hora)}</td>
           <td>${etiquetaEstado(cita.estado)}</td>
-          
+                      
             <td>
         ${cita.estado === 'pendiente'
             ? `<button type="button" onclick="confirmarCita(${Number(cita.id)})">Confirmar</button>`
             : ''}
 
         ${['pendiente', 'confirmada', 'reagendada'].includes(cita.estado)
-            ? `<button type="button" onclick="cancelarCita(${Number(cita.id)})">Cancelar</button>`
+            ? `
+            <button type="button" onclick="cancelarCita(${Number(cita.id)})">
+                Cancelar
+            </button>
+            <button type="button" onclick="abrirReagendar(${Number(cita.id)})">
+                Reagendar
+            </button>
+            `
             : '—'}
             </td>
 
@@ -195,6 +230,74 @@ async function cancelarCita(id) {
     );
   }
 }
+
+let citaParaReagendar = null;
+
+function abrirReagendar(id) {
+  citaParaReagendar = id;
+
+  const formulario = document.getElementById('formulario-reagendar');
+  const fecha = document.getElementById('fecha-reagendar');
+
+  formulario.reset();
+
+  
+  const hoy = new Date();
+  const anio = hoy.getFullYear();
+  const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+  const dia = String(hoy.getDate()).padStart(2, '0');
+
+  fecha.min = `${anio}-${mes}-${dia}`;
+
+  formulario.hidden = false;
+  formulario.scrollIntoView({ behavior: 'smooth' });
+}
+
+function cerrarReagendar() {
+  document.getElementById('formulario-reagendar').hidden = true;
+  citaParaReagendar = null;
+}
+
+document.getElementById('cerrar-reagendar')
+  .addEventListener('click', cerrarReagendar);
+
+document.getElementById('formulario-reagendar')
+  .addEventListener('submit', async function(evento) {
+    evento.preventDefault();
+
+    if (citaParaReagendar === null) {
+      return;
+    }
+
+    const fecha = document.getElementById('fecha-reagendar').value;
+    const hora = document.getElementById('hora-reagendar').value;
+
+    if (!confirm(`¿Reagendar la cita para ${fecha} a las ${hora}?`)) {
+      return;
+    }
+
+    try {
+      await api(`/api/recepcion/citas/${citaParaReagendar}/reagendar`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ fecha, hora })
+      });
+
+      alert('Cita reagendada correctamente.');
+
+      cerrarReagendar();
+      await cargarCitas();
+
+    } catch (error) {
+      alert(
+        error.mensajes?.join(', ') ||
+        error.message ||
+        'No se pudo reagendar la cita.'
+      );
+    }
+  });
 
   cargarCitas();
 </script>
