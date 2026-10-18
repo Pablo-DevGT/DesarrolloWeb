@@ -1,0 +1,359 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel de Recepción - Sistema de Citas</title>
+  <link rel="stylesheet" href="/comun/estilos.css">
+  <style>
+    .panel-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      margin: 24px 0;
+    }
+    .panel-tarjeta {
+      background: white;
+      border: 1px solid #dce3e6;
+      border-radius: 9px;
+      padding: 24px;
+    }
+    .panel-tarjeta h2 {
+      font-size: 19px;
+      margin: 0 0 12px;
+    }
+    .panel-tarjeta p {
+      color: #536575;
+      line-height: 1.5;
+    }
+    .panel-tarjeta .btn {
+      display: inline-block;
+      margin-top: 12px;
+      text-decoration: none;
+    }
+    .panel-seccion {
+      margin-top: 30px;
+    }
+  </style>
+  
+<style>
+  #estado-citas table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+  }
+
+  #estado-citas th,
+  #estado-citas td {
+    padding: 12px 10px;
+    text-align: left;
+    border-bottom: 1px solid #dce4e7;
+  }
+
+  #estado-citas th {
+    background-color: #edf4f4;
+    color: #16494a;
+  }
+
+  #estado-citas button,
+  #formulario-reagendar button {
+    background-color: #087779;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 3px;
+    cursor: pointer;
+  }
+
+  #estado-citas button:hover,
+  #formulario-reagendar button:hover {
+    background-color: #075c5e;
+  }
+
+  #formulario-reagendar:not([hidden]) {
+    margin-top: 20px;
+    padding: 20px;
+    border: 1px solid #dce4e7;
+    border-radius: 8px;
+    background-color: white;
+  }
+
+  #formulario-reagendar input {
+    padding: 9px;
+    margin: 8px;
+    max-width: 180px;
+  }
+</style>
+
+</head>
+<body>
+  <header id="menu" data-activo="recepcion"></header>
+
+  <main class="contenedor">
+    <h1>Panel de Recepcionista</h1>
+    <p class="subtitulo">
+      Administración de pacientes, médicos y citas
+      del consultorio.
+    </p>
+
+    <div class="panel-grid">
+      <section class="panel-tarjeta">
+        <h2>Pacientes</h2>
+        <p>Consultar, registrar y actualizar los datos
+           de los pacientes.</p>
+        <a class="btn" href="/pacientes/">
+          Gestionar pacientes
+        </a>
+      </section>
+
+      <section class="panel-tarjeta">
+        <h2>Médicos</h2>
+        <p>Consultar los médicos registrados y
+           sus horarios de atención.</p>
+        <a class="btn" href="/medicos/">
+          Ver médicos
+        </a>
+      </section>
+
+      <section class="panel-tarjeta">
+        <h2>Nueva cita</h2>
+        <p>Registrar solicitudes de citas según
+           la disponibilidad del consultorio.</p>
+        <a class="btn" href="/citas/">
+          Solicitar cita
+        </a>
+      </section>
+    </div>
+
+    <section class="panel-tarjeta panel-seccion">
+      <h2>Seguimiento de citas</h2>
+      <p>
+        Consulta y administra las citas del consultorio.
+        Puedes confirmar, cancelar o reagendar
+        según la disponibilidad del médico.
+      </p>
+        <div id="estado-citas">
+            Cargando citas...
+        </div>
+        
+        <form id="formulario-reagendar" hidden>
+        <h3>Reagendar cita</h3>
+        <p>Seleccioná la nueva fecha y hora de atención.</p>
+
+        <label for="fecha-reagendar">Nueva fecha</label>
+        <input
+            type="date"
+            id="fecha-reagendar"
+            required
+        >
+
+        <label for="hora-reagendar">Nueva hora</label>
+        <input
+            type="time"
+            id="hora-reagendar"
+            required
+        >
+
+        <button type="submit">
+            Guardar nuevo horario
+        </button>
+
+        <button type="button" id="cerrar-reagendar">
+            Cerrar
+        </button>
+        </form>
+
+    </section>
+  </main>
+
+  <script src="/comun/comun.js"></script>
+  
+<script>
+  async function cargarCitas() {
+    const contenedor = document.getElementById('estado-citas');
+
+    try {
+      const respuesta = await api('/api/recepcion/citas');
+      const citas = respuesta.citas;
+
+      if (!citas.length) {
+        contenedor.textContent = 'No hay citas registradas.';
+        return;
+      }
+
+      const filas = citas.map(cita => `
+        <tr>
+          <td>${escaparHTML(cita.paciente)}</td>
+          <td>${escaparHTML(cita.medico)}</td>
+          <td>${formatearFecha(cita.fecha)}</td>
+          <td>${escaparHTML(cita.hora)}</td>
+          <td>${etiquetaEstado(cita.estado)}</td>
+                      
+            <td>
+        ${cita.estado === 'pendiente'
+            ? `<button type="button" onclick="confirmarCita(${Number(cita.id)})">Confirmar</button>`
+            : ''}
+
+        ${['pendiente', 'confirmada', 'reagendada'].includes(cita.estado)
+            ? `
+            <button type="button" onclick="cancelarCita(${Number(cita.id)})">
+                Cancelar
+            </button>
+            <button type="button" onclick="abrirReagendar(${Number(cita.id)})">
+                Reagendar
+            </button>
+            `
+            : '—'}
+            </td>
+
+        </tr>
+      `).join('');
+
+      contenedor.innerHTML = `
+        <div style="overflow-x:auto">
+          <table style="width:100%; border-collapse:collapse">
+            <thead>
+              <tr>
+                <th>Paciente</th>
+                <th>Médico</th>
+                <th>Fecha</th>
+                <th>Hora</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>${filas}</tbody>
+          </table>
+        </div>
+      `;
+
+    } catch (error) {
+      contenedor.textContent =
+        error.mensajes?.join(', ') ||
+        'No se pudieron cargar las citas.';
+    }
+  }
+
+  cargarCitas();
+  
+  async function confirmarCita(id) {
+    const aceptar = confirm('¿Deseas confirmar esta cita?');
+
+    if (!aceptar) return;
+
+    try {
+      await api(`/api/recepcion/citas/${id}/confirmar`, {
+        method: 'PATCH'
+      });
+
+      alert('Cita confirmada correctamente.');
+      await cargarCitas();
+
+    } catch (error) {
+      alert(error.message || 'No se pudo confirmar la cita.');
+    }
+  }
+
+async function cancelarCita(id) {
+  const aceptar = confirm(
+    '¿Estás seguro de que deseas cancelar esta cita?'
+  );
+
+  if (!aceptar) {
+    return;
+  }
+
+  try {
+    await api(`/api/recepcion/citas/${id}/cancelar`, {
+      method: 'PATCH'
+    });
+
+    alert('Cita cancelada correctamente.');
+    await cargarCitas();
+
+  } catch (error) {
+    alert(
+      error.mensajes?.join(', ') ||
+      error.message ||
+      'No se pudo cancelar la cita.'
+    );
+  }
+}
+
+let citaParaReagendar = null;
+
+function abrirReagendar(id) {
+  citaParaReagendar = id;
+
+  const formulario = document.getElementById('formulario-reagendar');
+  const fecha = document.getElementById('fecha-reagendar');
+
+  formulario.reset();
+
+  
+  const hoy = new Date();
+  const anio = hoy.getFullYear();
+  const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+  const dia = String(hoy.getDate()).padStart(2, '0');
+
+  fecha.min = `${anio}-${mes}-${dia}`;
+
+  formulario.hidden = false;
+  formulario.scrollIntoView({ behavior: 'smooth' });
+}
+
+function cerrarReagendar() {
+  document.getElementById('formulario-reagendar').hidden = true;
+  citaParaReagendar = null;
+}
+
+document.getElementById('cerrar-reagendar')
+  .addEventListener('click', cerrarReagendar);
+
+document.getElementById('formulario-reagendar')
+  .addEventListener('submit', async function(evento) {
+    evento.preventDefault();
+
+    if (citaParaReagendar === null) {
+      return;
+    }
+
+    const fecha = document.getElementById('fecha-reagendar').value;
+    const hora = document.getElementById('hora-reagendar').value;
+
+    if (!confirm(`¿Reagendar la cita para ${fecha} a las ${hora}?`)) {
+      return;
+    }
+
+    try {
+      await api(`/api/recepcion/citas/${citaParaReagendar}/reagendar`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ fecha, hora })
+      });
+
+      alert('Cita reagendada correctamente.');
+
+      cerrarReagendar();
+      await cargarCitas();
+
+    } catch (error) {
+      alert(
+        error.mensajes?.join(', ') ||
+        error.message ||
+        'No se pudo reagendar la cita.'
+      );
+    }
+  });
+
+  cargarCitas();
+</script>
+</body>
+</html>
+</script>
+</body>
+</html>

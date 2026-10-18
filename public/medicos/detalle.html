@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detalle del médico · Sistema de Citas</title>
+  <link rel="stylesheet" href="/comun/estilos.css">
+  <link rel="stylesheet" href="/medicos/medicos.css">
+</head>
+<body>
+  <header id="menu" data-activo="medicos"></header>
+
+  <main class="contenedor">
+    <p><a href="/medicos/">← Volver a médicos</a></p>
+
+    <div id="alerta" class="oculto" role="status" aria-live="polite"></div>
+
+    <section id="contenido" class="oculto">
+      <div class="tarjeta">
+        <div class="ficha-cabecera">
+          <div>
+            <h1><span id="nombre"></span> <span id="estado"></span></h1>
+            <p class="subtitulo" id="especialidad-titulo"></p>
+          </div>
+          <div class="acciones">
+            <a class="btn btn-secundario" id="editar" href="#">Editar datos</a>
+            <button type="button" class="btn" id="cambiar-estado"></button>
+          </div>
+        </div>
+        <div id="aviso-inactivo" class="alerta alerta-info oculto">
+          Este médico está inactivo: no aparece en Solicitud de Citas y no puede recibir citas nuevas.
+          Sus citas e historial se conservan.
+        </div>
+        <dl class="datos">
+          <div><dt>Número de colegiado</dt><dd id="colegiado"></dd></div>
+          <div><dt>Especialidad</dt><dd id="especialidad"></dd></div>
+          <div><dt>Teléfono</dt><dd id="telefono"></dd></div>
+          <div><dt>Correo electrónico</dt><dd id="email"></dd></div>
+          <div><dt>Registrado</dt><dd id="creado"></dd></div>
+        </dl>
+      </div>
+
+      <div class="tarjeta" id="tarjeta-revision">
+        <h2>Citas por revisar <span class="contador oculto" id="contador-revision"></span></h2>
+        <p class="ayuda">
+          Citas futuras activas de este médico que quedaron fuera de su horario de atención o cuyo médico está
+          inactivo. No se modificaron: recepción debe confirmarlas, reagendarlas dentro del horario o cancelarlas.
+        </p>
+        <div id="lista-revision"><p class="vacio">Cargando…</p></div>
+      </div>
+
+      <div class="tarjeta">
+        <h2>Horarios de atención</h2>
+        <p class="ayuda">
+          Cada horario se divide en citas de 60 minutos. Los horarios activos de un mismo día no pueden superponerse.
+          Desactivar o modificar un horario no cambia las citas ya registradas.
+        </p>
+
+        <form id="form-horario" class="form-horario" novalidate>
+          <div class="campo">
+            <label for="dia_semana" id="titulo-form-horario">Día *</label>
+            <select id="dia_semana" name="dia_semana" required></select>
+          </div>
+          <div class="campo">
+            <label for="hora_inicio">Hora de inicio *</label>
+            <input id="hora_inicio" name="hora_inicio" type="time" required>
+          </div>
+          <div class="campo">
+            <label for="hora_fin">Hora de fin *</label>
+            <input id="hora_fin" name="hora_fin" type="time" required>
+          </div>
+          <div class="botones">
+            <button type="submit" class="btn" id="guardar-horario">Agregar horario</button>
+            <button type="button" class="btn btn-secundario oculto" id="cancelar-edicion">Cancelar edición</button>
+          </div>
+        </form>
+        <div id="alerta-horario" class="oculto" role="alert" style="margin-top: 12px;"></div>
+
+        <div class="semana" id="semana" style="margin-top: 16px;"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/comun/comun.js"></script>
+  <script src="/medicos/reglas.js"></script>
+  <script src="/medicos/medicos.js"></script>
+  <script>
+    const id = new URLSearchParams(location.search).get('id');
+    const alerta = document.getElementById('alerta');
+    const alertaHorario = document.getElementById('alerta-horario');
+    const formHorario = document.getElementById('form-horario');
+    const botonGuardarHorario = document.getElementById('guardar-horario');
+    const botonCancelarEdicion = document.getElementById('cancelar-edicion');
+    const botonEstado = document.getElementById('cambiar-estado');
+    const { DIAS, minutos, DURACION_CITA_MINUTOS } = ReglasMedicos;
+    const base = `/api/medicos/${encodeURIComponent(id ?? '')}`;
+    let medico = null;
+    let editandoId = null;
+
+    document.getElementById('dia_semana').innerHTML = '<option value="">Selecciona…</option>' +
+      DIAS.slice(1).map((dia, i) => `<option value="${i + 1}">${dia}</option>`).join('');
+
+    const texto = (valor, vacio = 'No registrado') => valor ? escaparHTML(valor) : `<span class="ayuda">${vacio}</span>`;
+
+    async function cargar() {
+      try {
+        medico = await peticion(base);
+      } catch (err) {
+        mostrarAlerta(alerta, 'error', err.mensajes);
+        document.getElementById('contenido').classList.add('oculto');
+        return;
+      }
+      document.title = `${medico.nombre} · Sistema de Citas`;
+      document.getElementById('nombre').textContent = medico.nombre;
+      document.getElementById('estado').innerHTML = etiquetaActivo(medico.activo);
+      document.getElementById('especialidad-titulo').textContent = medico.especialidad;
+      document.getElementById('colegiado').textContent = medico.colegiado;
+      document.getElementById('especialidad').textContent = medico.especialidad;
+      document.getElementById('telefono').innerHTML = texto(medico.telefono);
+      document.getElementById('email').innerHTML = texto(medico.email);
+      document.getElementById('creado').textContent = formatearFecha(medico.creado_en);
+      document.getElementById('editar').href = `/medicos/formulario.html?id=${medico.id}`;
+      const activo = Number(medico.activo);
+      botonEstado.textContent = activo ? 'Desactivar médico' : 'Activar médico';
+      botonEstado.className = `btn ${activo ? 'btn-peligro' : ''}`;
+      document.getElementById('aviso-inactivo').classList.toggle('oculto', !!activo);
+      document.getElementById('contenido').classList.remove('oculto');
+      pintarHorarios();
+      await cargarCitasPorRevisar();
+    }
+
+    async function cargarCitasPorRevisar() {
+      const tarjeta = document.getElementById('tarjeta-revision');
+      const lista = document.getElementById('lista-revision');
+      const contador = document.getElementById('contador-revision');
+      try {
+        const citas = await peticion(`${base}/citas-por-revisar`);
+        tarjeta.classList.toggle('con-pendientes', citas.length > 0);
+        contador.classList.toggle('oculto', !citas.length);
+        contador.textContent = citas.length;
+        lista.innerHTML = citas.length ? `
+          <div class="tabla-contenedor">
+            <table class="tabla tabla-compacta">
+              <thead><tr><th>Fecha</th><th>Hora</th><th>Paciente</th><th>Estado</th><th>Motivo de revisión</th></tr></thead>
+              <tbody>${citas.map((c) => `
+                <tr>
+                  <td>${formatearFecha(c.fecha)}</td>
+                  <td>${escaparHTML(c.hora)}</td>
+                  <td>${enlacePaciente(c)}</td>
+                  <td>${etiquetaEstado(c.estado)}</td>
+                  <td><span class="motivo-revision">${escaparHTML(c.motivo_revision)}</span></td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>` : '<p class="vacio">No hay citas por revisar.</p>';
+      } catch (err) {
+        tarjeta.classList.remove('con-pendientes');
+        lista.innerHTML = `<p class="vacio">${escaparHTML(err.mensajes?.[0] || 'No se pudieron cargar las citas por revisar.')}</p>`;
+      }
+    }
+
+    function pintarHorarios() {
+      document.getElementById('semana').innerHTML = DIAS.slice(1).map((nombreDia, i) => {
+        const rangos = medico.horarios.filter((h) => h.dia_semana === i + 1);
+        return `
+          <div class="dia">
+            <h3>${nombreDia}</h3>
+            ${rangos.length ? rangos.map((h) => {
+              const citas = Math.floor((minutos(h.hora_fin) - minutos(h.hora_inicio)) / DURACION_CITA_MINUTOS);
+              return `
+                <div class="rango ${Number(h.activo) ? '' : 'inactivo'} ${editandoId === h.id ? 'editando' : ''}">
+                  <div class="rango-horas">${escaparHTML(h.hora_inicio)} – ${escaparHTML(h.hora_fin)}</div>
+                  <div class="ayuda">${Number(h.activo) ? `${citas} cita(s) de 60 min` : 'Inactivo'}</div>
+                  <div class="acciones">
+                    <button type="button" class="btn btn-secundario btn-chico" data-editar="${h.id}">Editar</button>
+                    <button type="button" class="btn btn-chico ${Number(h.activo) ? 'btn-secundario' : ''}"
+                            data-estado="${h.id}">${Number(h.activo) ? 'Desactivar' : 'Activar'}</button>
+                  </div>
+                </div>`;
+            }).join('') : '<p class="vacio">Sin atención</p>'}
+          </div>`;
+      }).join('');
+    }
+
+    function terminarEdicion() {
+      editandoId = null;
+      formHorario.reset();
+      botonGuardarHorario.textContent = 'Agregar horario';
+      botonCancelarEdicion.classList.add('oculto');
+      pintarHorarios();
+    }
+
+    function editarHorario(horario) {
+      editandoId = horario.id;
+      formHorario.elements.dia_semana.value = horario.dia_semana;
+      formHorario.elements.hora_inicio.value = horario.hora_inicio;
+      formHorario.elements.hora_fin.value = horario.hora_fin;
+      botonGuardarHorario.textContent = 'Guardar cambios';
+      botonCancelarEdicion.classList.remove('oculto');
+      ocultarAlerta(alertaHorario);
+      pintarHorarios();
+      formHorario.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      formHorario.elements.dia_semana.focus();
+    }
+
+    function informarResultado(resultado, textoExito) {
+      const fuera = resultado.citas_fuera_de_disponibilidad || [];
+      if (fuera.length) {
+        mostrarAlerta(alertaHorario, 'advertencia',
+          advertenciaCitas(fuera, `${textoExito} Algunas citas quedaron fuera de la disponibilidad.`));
+      } else {
+        mostrarAlerta(alertaHorario, 'exito', textoExito);
+      }
+    }
+
+    formHorario.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      ocultarAlerta(alertaHorario);
+      ocultarAlerta(alerta);
+      // Mismas reglas que el servidor (reglas.js); el servidor vuelve a validar
+      const { errores, datos } = ReglasMedicos.validarHorario(Object.fromEntries(new FormData(formHorario)));
+      if (errores.length) return mostrarAlerta(alertaHorario, 'error', errores);
+
+      botonGuardarHorario.disabled = true;
+      try {
+        if (editandoId) {
+          const resultado = await conConfirmacion(
+            (confirmacion) => enviarJSON(`${base}/horarios/${editandoId}`, 'PUT', { ...datos, ...confirmacion }),
+            { titulo: 'El cambio afecta citas futuras', textoConfirmar: 'Guardar de todos modos' }
+          );
+          if (!resultado) return;
+          terminarEdicion();
+          informarResultado(resultado, 'Horario actualizado correctamente.');
+        } else {
+          await enviarJSON(`${base}/horarios`, 'POST', datos);
+          formHorario.reset();
+          mostrarAlerta(alertaHorario, 'exito', 'Horario agregado correctamente.');
+        }
+        await cargar();
+      } catch (err) {
+        mostrarAlerta(alertaHorario, 'error', err.mensajes);
+      } finally {
+        botonGuardarHorario.disabled = false;
+      }
+    });
+
+    botonCancelarEdicion.addEventListener('click', () => {
+      terminarEdicion();
+      ocultarAlerta(alertaHorario);
+    });
+
+    document.getElementById('semana').addEventListener('click', async (e) => {
+      const boton = e.target.closest('button');
+      if (!boton) return;
+      const horario = medico.horarios.find((h) => h.id === Number(boton.dataset.editar || boton.dataset.estado));
+      if (!horario) return;
+      if (boton.dataset.editar) return editarHorario(horario);
+
+      const activar = !Number(horario.activo);
+      boton.disabled = true;
+      ocultarAlerta(alertaHorario);
+      ocultarAlerta(alerta);
+      try {
+        const resultado = await conConfirmacion(
+          (confirmacion) => enviarJSON(`${base}/horarios/${horario.id}/estado`, 'PATCH', { activo: activar, ...confirmacion }),
+          { titulo: 'Desactivar el horario afecta citas futuras', textoConfirmar: 'Desactivar de todos modos' }
+        );
+        if (!resultado) return;
+        if (editandoId === horario.id) terminarEdicion();
+        const rango = `${DIAS[horario.dia_semana]} ${horario.hora_inicio}–${horario.hora_fin}`;
+        informarResultado(resultado, `Horario ${rango} ${activar ? 'activado' : 'desactivado'}.`);
+        await cargar();
+      } catch (err) {
+        mostrarAlerta(alertaHorario, 'error', err.mensajes);
+      } finally {
+        boton.disabled = false;
+      }
+    });
+
+    botonEstado.addEventListener('click', async () => {
+      botonEstado.disabled = true;
+      ocultarAlerta(alerta);
+      ocultarAlerta(alertaHorario);
+      try {
+        const cambio = await cambiarEstadoMedico(medico);
+        if (!cambio) return;
+        mostrarAlerta(alerta, cambio.tipo, cambio.mensaje);
+        await cargar();
+      } catch (err) {
+        mostrarAlerta(alerta, 'error', err.mensajes);
+      } finally {
+        botonEstado.disabled = false;
+      }
+    });
+
+    if (!id) {
+      mostrarAlerta(alerta, 'error', 'No se indicó qué médico mostrar.');
+    } else {
+      mensajeDeURL(alerta, {
+        creado: 'Médico registrado correctamente. Ahora agrega sus horarios de atención.',
+        guardado: 'Datos del médico guardados correctamente.',
+      });
+      cargar();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Médico · Sistema de Citas</title>
+  <link rel="stylesheet" href="/comun/estilos.css">
+  <link rel="stylesheet" href="/medicos/medicos.css">
+</head>
+<body>
+  <header id="menu" data-activo="medicos"></header>
+
+  <main class="contenedor">
+    <h1 id="titulo">Registrar médico</h1>
+    <p class="subtitulo">Los campos con * son obligatorios. Teléfono y correo son opcionales.</p>
+
+    <div id="alerta" class="oculto" role="alert"></div>
+
+    <form id="formulario" class="tarjeta" novalidate>
+      <div class="form-grid">
+        <div class="campo completo">
+          <label for="nombre">Nombre completo *</label>
+          <input id="nombre" name="nombre" required minlength="3" maxlength="120" autocomplete="name"
+                 placeholder="Dra. Ana Ruiz">
+        </div>
+        <div class="campo">
+          <label for="especialidad">Especialidad *</label>
+          <input id="especialidad" name="especialidad" required minlength="3" maxlength="80"
+                 list="lista-especialidades" placeholder="Pediatría">
+          <datalist id="lista-especialidades"></datalist>
+          <span class="ayuda">Elige una existente o escribe una nueva.</span>
+        </div>
+        <div class="campo">
+          <label for="colegiado">Número de colegiado *</label>
+          <input id="colegiado" name="colegiado" required minlength="3" maxlength="20"
+                 autocapitalize="characters" placeholder="10001">
+          <span class="ayuda">De 3 a 20 caracteres: letras, números o guiones. No se puede repetir.</span>
+        </div>
+        <div class="campo">
+          <label for="telefono">Teléfono</label>
+          <input id="telefono" name="telefono" type="tel" maxlength="20" autocomplete="tel"
+                 placeholder="2233-4455 (opcional)">
+          <span class="ayuda">De 8 a 20 caracteres: dígitos, espacios, guiones, paréntesis o +.</span>
+        </div>
+        <div class="campo">
+          <label for="email">Correo electrónico</label>
+          <input id="email" name="email" type="email" maxlength="120" autocomplete="email"
+                 placeholder="opcional">
+          <span class="ayuda">No se puede repetir entre médicos.</span>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; display: flex; gap: 12px; flex-wrap: wrap;">
+        <button class="btn" type="submit" id="guardar">Guardar</button>
+        <a class="btn btn-secundario" id="cancelar" href="/medicos/">Cancelar</a>
+      </div>
+    </form>
+  </main>
+
+  <script src="/comun/comun.js"></script>
+  <script src="/medicos/reglas.js"></script>
+  <script src="/medicos/medicos.js"></script>
+  <script>
+    const id = new URLSearchParams(location.search).get('id');
+    const form = document.getElementById('formulario');
+    const alerta = document.getElementById('alerta');
+    const botonGuardar = document.getElementById('guardar');
+    const CAMPOS = ['nombre', 'especialidad', 'colegiado', 'telefono', 'email'];
+
+    async function cargarEspecialidades() {
+      try {
+        const lista = await peticion('/api/medicos/especialidades');
+        document.getElementById('lista-especialidades').innerHTML =
+          lista.map((e) => `<option value="${escaparHTML(e)}"></option>`).join('');
+      } catch {
+        // Las sugerencias son opcionales
+      }
+    }
+
+    // Con ?id= es edición: cargar los datos actuales
+    async function cargarMedico() {
+      if (!id) return;
+      document.getElementById('titulo').textContent = 'Editar médico';
+      document.getElementById('cancelar').href = `/medicos/detalle.html?id=${encodeURIComponent(id)}`;
+      try {
+        const m = await peticion(`/api/medicos/${encodeURIComponent(id)}`);
+        for (const campo of CAMPOS) form.elements[campo].value = m[campo] ?? '';
+      } catch (err) {
+        mostrarAlerta(alerta, 'error', err.mensajes);
+        form.classList.add('oculto');
+      }
+    }
+
+    form.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      ocultarAlerta(alerta);
+
+      // Mismas reglas que el servidor (reglas.js); el servidor vuelve a validar
+      const { errores, datos } = ReglasMedicos.validarMedico(Object.fromEntries(new FormData(form)));
+      if (errores.length) {
+        mostrarAlerta(alerta, 'error', errores);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      botonGuardar.disabled = true;
+      try {
+        const medico = await enviarJSON(
+          id ? `/api/medicos/${encodeURIComponent(id)}` : '/api/medicos',
+          id ? 'PUT' : 'POST',
+          datos
+        );
+        location.href = `/medicos/detalle.html?id=${medico.id}&${id ? 'guardado' : 'creado'}=1`;
+      } catch (err) {
+        mostrarAlerta(alerta, 'error', err.mensajes);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } finally {
+        botonGuardar.disabled = false;
+      }
+    });
+
+    cargarEspecialidades();
+    cargarMedico();
+  </script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pacientes · Sistema de Citas</title>
+  <link rel="stylesheet" href="/comun/estilos.css">
+</head>
+<body>
+  <header id="menu" data-activo="pacientes"></header>
+
+  <main class="contenedor">
+    <h1>Pacientes</h1>
+    <p class="subtitulo">Busca un paciente, edita sus datos o consulta su historial de citas.</p>
+
+    <div class="barra-acciones">
+      <div class="campo" style="flex: 1; max-width: 420px;">
+        <label for="buscar">Buscar</label>
+        <input id="buscar" type="search" placeholder="Nombre, teléfono o correo">
+      </div>
+      <a class="btn" href="/pacientes/formulario.html">+ Registrar paciente</a>
+    </div>
+
+    <div id="alerta" class="oculto"></div>
+
+    <div class="tarjeta tabla-contenedor">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Edad</th>
+            <th>Contacto</th>
+            <th>Alergias</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="filas">
+          <tr><td colspan="5" class="vacio">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="/comun/comun.js"></script>
+  <script>
+    const filas = document.getElementById('filas');
+    const alerta = document.getElementById('alerta');
+    const buscar = document.getElementById('buscar');
+
+    async function cargar(limpiarAlerta = false) {
+      try {
+        const q = encodeURIComponent(buscar.value.trim());
+        const pacientes = await api(`/api/pacientes?q=${q}`);
+        if (limpiarAlerta) ocultarAlerta(alerta);
+        if (!pacientes.length) {
+          filas.innerHTML = '<tr><td colspan="5" class="vacio">No hay pacientes que coincidan.</td></tr>';
+          return;
+        }
+        filas.innerHTML = pacientes.map((p) => `
+          <tr>
+            <td>${escaparHTML(p.nombre)}</td>
+            <td>${p.edad} años</td>
+            <td>${escaparHTML(p.telefono)}${p.email ? `<br><small>${escaparHTML(p.email)}</small>` : ''}</td>
+            <td>${p.alergias
+              ? `<span class="alergia">${escaparHTML(p.alergias)}</span>`
+              : '<span class="ayuda">Ninguna conocida</span>'}</td>
+            <td>
+              <a class="btn btn-secundario btn-chico" href="/pacientes/formulario.html?id=${p.id}">Editar</a>
+              <a class="btn btn-chico" href="/pacientes/historial.html?id=${p.id}">Historial</a>
+            </td>
+          </tr>`).join('');
+      } catch (err) {
+        mostrarAlerta(alerta, 'error', err.mensajes || 'No se pudo cargar la lista.');
+        filas.innerHTML = '';
+      }
+    }
+
+    let espera;
+    buscar.addEventListener('input', () => {
+      clearTimeout(espera);
+      espera = setTimeout(() => cargar(true), 300);
+    });
+
+    // Mensaje después de guardar (viene de formulario.html)
+    if (new URLSearchParams(location.search).get('guardado')) {
+      mostrarAlerta(alerta, 'exito', 'Paciente guardado correctamente.');
+    }
+    cargar();
+  </script>
+</body>
+</html>

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agenda del doctor · Sistema de Citas</title>
+  <link rel="stylesheet" href="/comun/estilos.css">
+  <link rel="stylesheet" href="/agenda/agenda.css">
+</head>
+<body>
+  <header id="menu" data-activo="agenda"></header>
+
+  <main class="contenedor">
+    <h1 id="titulo">Agenda del doctor</h1>
+    <p class="subtitulo" id="subtitulo">Citas del día con el nombre del paciente, la hora y el motivo.</p>
+
+    <div id="alerta" class="oculto" role="status" aria-live="polite"></div>
+
+    <!-- Solo la recepcionista elige el médico; el doctor ve su propia agenda -->
+    <div class="tarjeta selector-medico oculto" id="tarjeta-medico">
+      <div class="campo">
+        <label for="medico_id">Médico</label>
+        <select id="medico_id" name="medico_id">
+          <option value="">Cargando médicos…</option>
+        </select>
+      </div>
+    </div>
+
+    <form class="tarjeta navegacion-dia" id="navegacion">
+      <button type="button" class="btn btn-secundario" id="anterior" title="Día anterior">‹ Anterior</button>
+      <div class="campo">
+        <label for="fecha">Fecha</label>
+        <input id="fecha" name="fecha" type="date" required>
+      </div>
+      <button type="button" class="btn btn-secundario" id="hoy">Hoy</button>
+      <button type="button" class="btn btn-secundario" id="siguiente" title="Día siguiente">Siguiente ›</button>
+    </form>
+
+    <p class="resumen" id="resumen"></p>
+
+    <div class="tarjeta tabla-contenedor">
+      <table class="tabla">
+        <thead>
+          <tr>
+            <th>Hora</th>
+            <th>Paciente</th>
+            <th>Alergias</th>
+            <th>Motivo</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="filas">
+          <tr><td colspan="6" class="vacio">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="/comun/comun.js"></script>
+  <script>
+    const ESTADOS_ACTIVOS = ['pendiente', 'confirmada', 'reagendada'];
+    const alerta = document.getElementById('alerta');
+    const filas = document.getElementById('filas');
+    const resumen = document.getElementById('resumen');
+    const selectorFecha = document.getElementById('fecha');
+    const selectorMedico = document.getElementById('medico_id');
+    const tarjetaMedico = document.getElementById('tarjeta-medico');
+    let usuario = null;
+    let agenda = null;
+    let carga = 0;
+
+    function fechaLocal(fecha = new Date()) {
+      return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
+    }
+
+    function moverDias(dias) {
+      const [a, m, d] = selectorFecha.value.split('-').map(Number);
+      selectorFecha.value = fechaLocal(new Date(a, m - 1, d + dias));
+      cargar();
+    }
+
+    // '2030-01-07' -> 'lunes, 7 de enero de 2030'
+    function fechaLarga(iso) {
+      const [a, m, d] = iso.split('-').map(Number);
+      return new Date(a, m - 1, d).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
+    // El doctor no tiene acceso a la página de pacientes; solo la recepcionista
+    // ve el enlace al historial
+    function nombrePaciente(cita) {
+      const nombre = escaparHTML(cita.paciente);
+      const datos = `<div class="datos-paciente">${cita.edad} años · ${escaparHTML(cita.telefono)}</div>`;
+      if (usuario.rol !== 'admin') return nombre + datos;
+      return `<a href="/pacientes/historial.html?id=${cita.paciente_id}" title="Ver historial">${nombre}</a>${datos}`;
+    }
+
+    function puedeAtender(cita) {
+      return ESTADOS_ACTIVOS.includes(cita.estado) && agenda.fecha <= fechaLocal();
+    }
+
+    function pintar() {
+      const { medico, fecha, citas, resumen: r } = agenda;
+      document.getElementById('titulo').textContent = `Agenda de ${medico.nombre}`;
+      document.getElementById('subtitulo').textContent =
+        `${medico.especialidad} · ${fechaLarga(fecha)}${Number(medico.activo) ? '' : ' · Médico inactivo'}`;
+      resumen.innerHTML = r.total
+        ? `<strong>${r.total}</strong> cita(s): ${r.activas} por atender, ${r.atendidas} atendida(s), ${r.canceladas} cancelada(s).`
+        : '';
+
+      if (!citas.length) {
+        filas.innerHTML = '<tr><td colspan="6" class="vacio">No hay citas para este día.</td></tr>';
+        return;
+      }
+      filas.innerHTML = citas.map((c) => `
+        <tr class="${c.estado === 'cancelada' ? 'fila-cancelada' : c.estado === 'atendida' ? 'fila-atendida' : ''}">
+          <td class="hora">${escaparHTML(c.hora)}</td>
+          <td>${nombrePaciente(c)}</td>
+          <td>${c.alergias
+            ? `<span class="alergia">${escaparHTML(c.alergias)}</span>`
+            : '<span class="sin-alergias">Ninguna conocida</span>'}</td>
+          <td>${escaparHTML(c.motivo)}</td>
+          <td>${etiquetaEstado(c.estado)}</td>
+          <td>${puedeAtender(c)
+            ? `<button type="button" class="btn btn-chico" data-atender="${c.id}">Marcar atendida</button>`
+            : ''}</td>
+        </tr>`).join('');
+    }
+
+    async function cargar() {
+      const cargaActual = ++carga;
+      const parametros = new URLSearchParams({ fecha: selectorFecha.value });
+      if (usuario.rol === 'admin') {
+        if (!selectorMedico.value) {
+          filas.innerHTML = '<tr><td colspan="6" class="vacio">Selecciona un médico para ver su agenda.</td></tr>';
+          resumen.textContent = '';
+          return;
+        }
+        parametros.set('medico_id', selectorMedico.value);
+      }
+      history.replaceState(null, '', `${location.pathname}?${parametros}`);
+      try {
+        const resultado = await api(`/api/agenda?${parametros}`);
+        if (cargaActual !== carga) return;
+        agenda = resultado;
+        ocultarAlerta(alerta);
+        pintar();
+      } catch (err) {
+        if (cargaActual !== carga) return;
+        mostrarAlerta(alerta, 'error', err.mensajes);
+        filas.innerHTML = '';
+        resumen.textContent = '';
+      }
+    }
+
+    async function atender(boton, id) {
+      const cita = agenda.citas.find((c) => c.id === id);
+      boton.disabled = true;
+      ocultarAlerta(alerta);
+      try {
+        await api(`/api/agenda/citas/${id}/atender`, { method: 'PATCH' });
+        mostrarAlerta(alerta, 'exito', `Cita de las ${cita.hora} con ${cita.paciente} marcada como atendida.`);
+      } catch (err) {
+        mostrarAlerta(alerta, 'error', err.mensajes);
+      } finally {
+        await cargar();
+      }
+    }
+
+    async function cargarMedicos() {
+      const parametros = new URLSearchParams(location.search);
+      try {
+        const medicos = await api('/api/medicos?activo=1');
+        selectorMedico.innerHTML = '<option value="">Selecciona un médico</option>' +
+          medicos.map((m) =>
+            `<option value="${m.id}">${escaparHTML(m.nombre)} · ${escaparHTML(m.especialidad)}</option>`
+          ).join('');
+        if (!medicos.length) selectorMedico.innerHTML = '<option value="">No hay médicos activos</option>';
+        if (parametros.get('medico_id')) selectorMedico.value = parametros.get('medico_id');
+      } catch (err) {
+        mostrarAlerta(alerta, 'error', err.mensajes || 'No se pudieron cargar los médicos.');
+      }
+    }
+
+    async function iniciar() {
+      usuario = await sesionActual();
+      if (!usuario) {
+        location.href = `/login.html?volver=${encodeURIComponent(location.pathname + location.search)}`;
+        return;
+      }
+      const parametros = new URLSearchParams(location.search);
+      selectorFecha.value = /^\d{4}-\d{2}-\d{2}$/.test(parametros.get('fecha') || '') ? parametros.get('fecha') : fechaLocal();
+      if (usuario.rol === 'admin') {
+        tarjetaMedico.classList.remove('oculto');
+        await cargarMedicos();
+      }
+      cargar();
+    }
+
+    selectorFecha.addEventListener('change', () => { if (selectorFecha.value) cargar(); });
+    selectorMedico.addEventListener('change', cargar);
+    document.getElementById('anterior').addEventListener('click', () => moverDias(-1));
+    document.getElementById('siguiente').addEventListener('click', () => moverDias(1));
+    document.getElementById('hoy').addEventListener('click', () => { selectorFecha.value = fechaLocal(); cargar(); });
+    document.getElementById('navegacion').addEventListener('submit', (e) => e.preventDefault());
+    filas.addEventListener('click', (e) => {
+      const boton = e.target.closest('button[data-atender]');
+      if (boton) atender(boton, Number(boton.dataset.atender));
+    });
+
+    iniciar();
+  </script>
+</body>
+</html>
