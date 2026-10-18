@@ -1,0 +1,26 @@
+/* Estilos propios de la agenda del doctor. La base es /comun/estilos.css */
+.navegacion-dia {
+  display: grid;
+  grid-template-columns: auto minmax(160px, 1fr) auto auto;
+  gap: 8px;
+  align-items: end;
+}
+.navegacion-dia .campo { min-width: 0; }
+.selector-medico { margin-bottom: 16px; }
+
+.resumen { color: var(--color-texto-suave); font-size: 0.9rem; margin: 0 0 8px; }
+.resumen strong { color: var(--color-texto); }
+
+.hora { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fila-cancelada td { color: var(--color-texto-suave); }
+.fila-cancelada .hora { text-decoration: line-through; }
+.fila-atendida td { color: var(--color-texto-suave); }
+.sin-alergias { color: var(--color-texto-suave); font-size: 0.85rem; }
+.datos-paciente { font-size: 0.85rem; color: var(--color-texto-suave); }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.alerta-advertencia { background: #fff4d6; color: #7a5600; }
+
+@media (max-width: 640px) {
+  .navegacion-dia { grid-template-columns: 1fr 1fr; }
+  .navegacion-dia .campo { grid-column: 1 / -1; }
+}
