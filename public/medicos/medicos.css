@@ -34,6 +34,7 @@
 }
 .acciones-tabla .btn { width: 100%; text-align: center; white-space: nowrap; }
 .fila-inactiva td { color: var(--color-texto-suave); }
+.tabla .vacio p { margin: 0 0 10px; }
 .ayuda { font-size: 0.8rem; color: var(--color-texto-suave); }
 .resumen { color: var(--color-texto-suave); font-size: 0.9rem; margin: 0 0 8px; }
 
@@ -78,6 +79,7 @@
   font-size: 0.8rem;
   font-weight: 600;
 }
+.contador.oculto { display: none; } /* sin citas por revisar no se muestra "0" */
 #tarjeta-revision .vacio { text-align: left; padding: 4px 0; }
 
 /* Horarios por día */

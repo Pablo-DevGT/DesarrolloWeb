@@ -107,7 +107,13 @@
         ? `${medicos.length} médico(s): ${activos} activo(s), ${medicos.length - activos} inactivo(s).`
         : '';
       if (!medicos.length) {
-        filas.innerHTML = '<tr><td colspan="7" class="vacio">No hay médicos que coincidan con la búsqueda.</td></tr>';
+        // Distingue "no hay ningún médico" de "ninguno coincide con la búsqueda o los filtros"
+        const hayFiltros = [...new FormData(filtros).values()].some((valor) => String(valor).trim());
+        filas.innerHTML = `<tr><td colspan="7" class="vacio">${hayFiltros
+          ? `<p>Ningún médico coincide con la búsqueda o los filtros seleccionados.</p>
+             <button type="button" class="btn btn-secundario btn-chico" data-limpiar>Limpiar filtros</button>`
+          : `<p>Aún no hay médicos registrados.</p>
+             <a class="btn btn-chico" href="/medicos/formulario.html">+ Registrar el primer médico</a>`}</td></tr>`;
         return;
       }
       filas.innerHTML = medicos.map((m) => `
@@ -148,6 +154,10 @@
     }
 
     filas.addEventListener('click', (e) => {
+      if (e.target.closest('button[data-limpiar]')) {
+        document.getElementById('limpiar').click();
+        return;
+      }
       const boton = e.target.closest('button[data-estado]');
       if (!boton) return;
       const medico = medicos.find((m) => m.id === Number(boton.dataset.estado));
