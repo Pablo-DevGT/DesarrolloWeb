@@ -1,0 +1,94 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel de Recepción - Sistema de Citas</title>
+  <link rel="stylesheet" href="/comun/estilos.css">
+  <style>
+    .panel-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      margin: 24px 0;
+    }
+    .panel-tarjeta {
+      background: white;
+      border: 1px solid #dce3e6;
+      border-radius: 9px;
+      padding: 24px;
+    }
+    .panel-tarjeta h2 {
+      font-size: 19px;
+      margin: 0 0 12px;
+    }
+    .panel-tarjeta p {
+      color: #536575;
+      line-height: 1.5;
+    }
+    .panel-tarjeta .btn {
+      display: inline-block;
+      margin-top: 12px;
+      text-decoration: none;
+    }
+    .panel-seccion {
+      margin-top: 30px;
+    }
+  </style>
+</head>
+<body>
+  <header id="menu" data-activo="recepcion"></header>
+
+  <main class="contenedor">
+    <h1>Panel de Recepcionista</h1>
+    <p class="subtitulo">
+      Administración de pacientes, médicos y citas
+      del consultorio.
+    </p>
+
+    <div class="panel-grid">
+      <section class="panel-tarjeta">
+        <h2>Pacientes</h2>
+        <p>Consultar, registrar y actualizar los datos
+           de los pacientes.</p>
+        <a class="btn" href="/pacientes/">
+          Gestionar pacientes
+        </a>
+      </section>
+
+      <section class="panel-tarjeta">
+        <h2>Médicos</h2>
+        <p>Consultar los médicos registrados y
+           sus horarios de atención.</p>
+        <a class="btn" href="/medicos/">
+          Ver médicos
+        </a>
+      </section>
+
+      <section class="panel-tarjeta">
+        <h2>Nueva cita</h2>
+        <p>Registrar solicitudes de citas según
+           la disponibilidad del consultorio.</p>
+        <a class="btn" href="/citas/">
+          Solicitar cita
+        </a>
+      </section>
+    </div>
+
+    <section class="panel-tarjeta panel-seccion">
+      <h2>Seguimiento de citas</h2>
+      <p>
+        Aquí se incorporará el listado de citas,
+        su estado y las operaciones para confirmar,
+        cancelar o reagendar.
+      </p>
+      <p id="estado-citas">
+        Pendiente de conectar con la API de recepción.
+      </p>
+    </section>
+  </main>
+
+  <script src="/comun/comun.js"></script>
+</body>
+</html>
